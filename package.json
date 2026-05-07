@@ -8,7 +8,10 @@
     "api:build": "pnpm --filter @mnemos/api build",
     "api:start": "pnpm --filter @mnemos/api start:prod",
     "agent:run": "pnpm --filter @mnemos/reference-agent start",
-    "build": "pnpm sdk:build && pnpm api:build"
+    "build": "pnpm sdk:build && pnpm api:build",
+    "test:sdk": "pnpm --filter @mnemos/sdk test",
+    "test:api": "pnpm --filter @mnemos/api test",
+    "test": "pnpm test:sdk && pnpm test:api"
   },
   "devDependencies": {
     "typescript": "^5.4.0"
