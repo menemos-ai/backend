@@ -4,13 +4,11 @@ import { MARKETPLACE_REPOSITORY } from './marketplace.repository.interface';
 import type { IMarketplaceRepository } from './marketplace.repository.interface';
 
 const mockListing = {
-  price: 1000n,
-  rentalPricePerDay: 100n,
-  isForSale: true,
-  isForRent: false,
-  isForFork: true,
-  forkRoyaltyBps: 500,
   seller: '0xdeadbeef' as `0x${string}`,
+  buyPrice: 1000n,
+  rentPricePerDay: 100n,
+  forkPrice: 500n,
+  royaltyBps: 500,
 };
 
 function buildMockRepo(overrides: Partial<IMarketplaceRepository> = {}): IMarketplaceRepository {
@@ -35,13 +33,11 @@ describe('MarketplaceService', () => {
       const service = buildService(buildMockRepo());
       const result = await service.getListing(1n);
       expect(result).toEqual({
-        price: '1000',
-        rentalPricePerDay: '100',
-        isForSale: true,
-        isForRent: false,
-        isForFork: true,
-        forkRoyaltyBps: 500,
         seller: '0xdeadbeef',
+        buyPrice: '1000',
+        rentPricePerDay: '100',
+        forkPrice: '500',
+        royaltyBps: 500,
       });
     });
 
@@ -73,24 +69,20 @@ describe('MarketplaceService', () => {
         tokenId: '1',
         price: '1000',
         rentalPricePerDay: '100',
-        isForSale: true,
-        isForRent: false,
-        isForFork: true,
+        forkPrice: '500',
         forkRoyaltyBps: 500,
       });
       expect(repo.list).toHaveBeenCalledWith(1n, {
-        price: 1000n,
-        rentalPricePerDay: 100n,
-        isForSale: true,
-        isForRent: false,
-        isForFork: true,
-        forkRoyaltyBps: 500,
+        buyPrice: 1000n,
+        rentPricePerDay: 100n,
+        forkPrice: 500n,
+        royaltyBps: 500,
       });
     });
 
     it('returns txHash object', async () => {
       const service = buildService(buildMockRepo());
-      const result = await service.list({ tokenId: '1', price: '0', rentalPricePerDay: '0', isForSale: false, isForRent: false, isForFork: false, forkRoyaltyBps: 0 });
+      const result = await service.list({ tokenId: '1', price: '0', rentalPricePerDay: '0', forkPrice: '0', forkRoyaltyBps: 0 });
       expect(result).toEqual({ txHash: '0xabc' });
     });
   });

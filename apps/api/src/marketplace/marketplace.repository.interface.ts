@@ -4,13 +4,11 @@ export const MARKETPLACE_REPOSITORY = Symbol('IMarketplaceRepository');
 
 export interface IMarketplaceRepository {
   getListing(tokenId: bigint): Promise<{
-    price: bigint;
-    rentalPricePerDay: bigint;
-    isForSale: boolean;
-    isForRent: boolean;
-    isForFork: boolean;
-    forkRoyaltyBps: number;
     seller: `0x${string}`;
+    buyPrice: bigint;
+    rentPricePerDay: bigint;
+    forkPrice: bigint;
+    royaltyBps: number;
   }>;
 
   list(tokenId: bigint, terms: ListingTerms): Promise<`0x${string}`>;

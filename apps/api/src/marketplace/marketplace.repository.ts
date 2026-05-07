@@ -23,8 +23,12 @@ export class MarketplaceRepository implements IMarketplaceRepository {
     return this.mnemos.getClient().rent(tokenId, durationDays);
   }
 
-  fork(tokenId: bigint) {
-    return this.mnemos.getClient().fork(tokenId);
+  async fork(tokenId: bigint) {
+    const [listing, info] = await Promise.all([
+      this.mnemos.getClient().getListing(tokenId),
+      this.mnemos.getClient().getMemoryInfo(tokenId),
+    ]);
+    return this.mnemos.getClient().fork(tokenId, info.contentHash, info.storageUri, listing.forkPrice);
   }
 
   payRoyalty(parentTokenId: bigint, amount: bigint) {

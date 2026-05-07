@@ -15,13 +15,11 @@ export class MarketplaceService {
     try {
       const result = await this.repo.getListing(tokenId);
       return {
-        price: result.price.toString(),
-        rentalPricePerDay: result.rentalPricePerDay.toString(),
-        isForSale: result.isForSale,
-        isForRent: result.isForRent,
-        isForFork: result.isForFork,
-        forkRoyaltyBps: result.forkRoyaltyBps,
         seller: result.seller,
+        buyPrice: result.buyPrice.toString(),
+        rentPricePerDay: result.rentPricePerDay.toString(),
+        forkPrice: result.forkPrice.toString(),
+        royaltyBps: result.royaltyBps,
       };
     } catch (error) {
       handleChainError(error);
@@ -31,12 +29,10 @@ export class MarketplaceService {
   async list(dto: ListDto) {
     try {
       const txHash = await this.repo.list(BigInt(dto.tokenId), {
-        price: BigInt(dto.price),
-        rentalPricePerDay: BigInt(dto.rentalPricePerDay),
-        isForSale: dto.isForSale,
-        isForRent: dto.isForRent,
-        isForFork: dto.isForFork,
-        forkRoyaltyBps: dto.forkRoyaltyBps,
+        buyPrice: BigInt(dto.price),
+        rentPricePerDay: BigInt(dto.rentalPricePerDay),
+        forkPrice: BigInt(dto.forkPrice),
+        royaltyBps: dto.forkRoyaltyBps,
       });
       return { txHash };
     } catch (error) {

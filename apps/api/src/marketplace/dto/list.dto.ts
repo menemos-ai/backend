@@ -20,17 +20,12 @@ export class ListDto {
   @IsString()
   rentalPricePerDay!: string;
 
-  @ApiProperty({ description: 'Whether the token can be purchased outright', example: true })
-  @IsBoolean()
-  isForSale!: boolean;
-
-  @ApiProperty({ description: 'Whether the token can be rented', example: false })
-  @IsBoolean()
-  isForRent!: boolean;
-
-  @ApiProperty({ description: 'Whether the token can be forked', example: true })
-  @IsBoolean()
-  isForFork!: boolean;
+  @ApiProperty({
+    description: 'Fork price in wei (EVM uint256 as decimal string). Set to "0" to disable forking.',
+    example: '500000000000000000',
+  })
+  @IsString()
+  forkPrice!: string;
 
   @ApiProperty({
     description: 'Royalty fee in basis points (0–10 000). 500 = 5%',
