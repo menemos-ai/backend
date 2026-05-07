@@ -3,10 +3,10 @@ import type { MemoryMetadata } from '@mnemos/sdk';
 
 export class SnapshotDto {
   @IsObject()
-  data: unknown;
+  data!: unknown;
 
   @IsObject()
-  metadata: MemoryMetadata;
+  metadata!: MemoryMetadata;
 
   @IsString()
   @IsOptional()

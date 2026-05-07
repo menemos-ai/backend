@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { MarketplaceService } from './marketplace.service';
 import { ListDto } from './dto/list.dto';
 import { RentDto } from './dto/rent.dto';
+import { PayRoyaltyDto } from './dto/pay-royalty.dto';
 
 @Controller('marketplace')
 export class MarketplaceController {
@@ -30,5 +31,10 @@ export class MarketplaceController {
   @Post('fork/:tokenId')
   fork(@Param('tokenId') tokenId: string) {
     return this.marketplace.fork(BigInt(tokenId));
+  }
+
+  @Post('royalty/:tokenId')
+  payRoyalty(@Param('tokenId') tokenId: string, @Body() dto: PayRoyaltyDto) {
+    return this.marketplace.payRoyalty(BigInt(tokenId), dto);
   }
 }

@@ -171,7 +171,7 @@ export class MnemosClient {
     const storageUri = await this.uploadToStorage(encrypted);
     const contentHash = keccak256(toHex(encrypted));
 
-    const txHash = await this.walletClient.writeContract({
+    const txHash = await (this.walletClient as any).writeContract({
       address: this.config.registryAddress,
       abi: MEMORY_REGISTRY_ABI,
       functionName: 'mintRoot',
@@ -200,7 +200,7 @@ export class MnemosClient {
   }
 
   async list(tokenId: bigint, terms: ListingTerms): Promise<`0x${string}`> {
-    return this.walletClient.writeContract({
+    return (this.walletClient as any).writeContract({
       address: this.config.marketplaceAddress,
       abi: MEMORY_MARKETPLACE_ABI,
       functionName: 'list',
@@ -218,7 +218,7 @@ export class MnemosClient {
 
   async buy(tokenId: bigint): Promise<`0x${string}`> {
     const listing = await this.getListing(tokenId);
-    return this.walletClient.writeContract({
+    return (this.walletClient as any).writeContract({
       address: this.config.marketplaceAddress,
       abi: MEMORY_MARKETPLACE_ABI,
       functionName: 'buy',
@@ -230,7 +230,7 @@ export class MnemosClient {
   async rent(tokenId: bigint, durationDays: number): Promise<`0x${string}`> {
     const listing = await this.getListing(tokenId);
     const totalCost = listing.rentalPricePerDay * BigInt(durationDays);
-    return this.walletClient.writeContract({
+    return (this.walletClient as any).writeContract({
       address: this.config.marketplaceAddress,
       abi: MEMORY_MARKETPLACE_ABI,
       functionName: 'rent',
@@ -240,7 +240,8 @@ export class MnemosClient {
   }
 
   async fork(tokenId: bigint): Promise<`0x${string}`> {
-    return this.walletClient.writeContract({
+    // TODO: fork() ABI is payable but no value is passed here — verify contract behavior
+    return (this.walletClient as any).writeContract({
       address: this.config.marketplaceAddress,
       abi: MEMORY_MARKETPLACE_ABI,
       functionName: 'fork',
@@ -249,7 +250,7 @@ export class MnemosClient {
   }
 
   async payRoyalty(parentTokenId: bigint, amount: bigint): Promise<`0x${string}`> {
-    return this.walletClient.writeContract({
+    return (this.walletClient as any).writeContract({
       address: this.config.marketplaceAddress,
       abi: MEMORY_MARKETPLACE_ABI,
       functionName: 'payRoyalty',
@@ -273,16 +274,8 @@ export class MnemosClient {
       functionName: 'getListing',
       args: [tokenId],
     });
-    const { price, rentalPricePerDay, isForSale, isForRent, isForFork, forkRoyaltyBps, seller } =
-      result as {
-        price: bigint;
-        rentalPricePerDay: bigint;
-        isForSale: boolean;
-        isForRent: boolean;
-        isForFork: boolean;
-        forkRoyaltyBps: number;
-        seller: `0x${string}`;
-      };
+    const [price, rentalPricePerDay, isForSale, isForRent, isForFork, forkRoyaltyBps, seller] =
+      result as unknown as [bigint, bigint, boolean, boolean, boolean, number, `0x${string}`];
     return { price, rentalPricePerDay, isForSale, isForRent, isForFork, forkRoyaltyBps, seller };
   }
 
@@ -293,13 +286,8 @@ export class MnemosClient {
       functionName: 'getMemoryInfo',
       args: [tokenId],
     });
-    const { contentHash, storageUri, creator, parent, timestamp } = result as {
-      contentHash: `0x${string}`;
-      storageUri: string;
-      creator: `0x${string}`;
-      parent: bigint;
-      timestamp: bigint;
-    };
+    const [contentHash, storageUri, creator, parent, timestamp] =
+      result as unknown as [`0x${string}`, string, `0x${string}`, bigint, bigint];
     return { tokenId, contentHash, storageUri, creator, parent, timestamp };
   }
 
@@ -334,7 +322,8 @@ export class MnemosClient {
   private encrypt(data: string): Uint8Array {
     const key = this.deriveSymmetricKey();
     const nonce = nacl.randomBytes(nacl.secretbox.nonceLength);
-    const message = encodeUTF8(data);
+    // decodeUTF8: string → Uint8Array (tweetnacl-util naming is inverted vs intuition)
+    const message = decodeUTF8(data);
     const box = nacl.secretbox(message, nonce, key);
     const result = new Uint8Array(nonce.length + box.length);
     result.set(nonce);
@@ -348,7 +337,8 @@ export class MnemosClient {
     const box = data.slice(nacl.secretbox.nonceLength);
     const decrypted = nacl.secretbox.open(box, nonce, key);
     if (!decrypted) throw new Error('Decryption failed — invalid key or corrupted data');
-    return decodeUTF8(decrypted);
+    // encodeUTF8: Uint8Array → string (tweetnacl-util naming is inverted vs intuition)
+    return encodeUTF8(decrypted);
   }
 
   private deriveSymmetricKey(): Uint8Array {

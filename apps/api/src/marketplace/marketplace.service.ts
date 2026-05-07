@@ -1,49 +1,82 @@
-import { Injectable } from '@nestjs/common';
-import { MnemosService } from '../mnemos/mnemos.service';
+import { Inject, Injectable } from '@nestjs/common';
+import { handleChainError } from '../common/chain-error.util';
+import { MARKETPLACE_REPOSITORY, IMarketplaceRepository } from './marketplace.repository.interface';
 import type { ListDto } from './dto/list.dto';
 import type { RentDto } from './dto/rent.dto';
+import type { PayRoyaltyDto } from './dto/pay-royalty.dto';
 
 @Injectable()
 export class MarketplaceService {
-  constructor(private readonly mnemos: MnemosService) {}
+  constructor(
+    @Inject(MARKETPLACE_REPOSITORY) private readonly repo: IMarketplaceRepository,
+  ) {}
 
   async getListing(tokenId: bigint) {
-    const result = await this.mnemos.getClient().getListing(tokenId);
-    return {
-      price: result.price.toString(),
-      rentalPricePerDay: result.rentalPricePerDay.toString(),
-      isForSale: result.isForSale,
-      isForRent: result.isForRent,
-      isForFork: result.isForFork,
-      forkRoyaltyBps: result.forkRoyaltyBps,
-      seller: result.seller,
-    };
+    try {
+      const result = await this.repo.getListing(tokenId);
+      return {
+        price: result.price.toString(),
+        rentalPricePerDay: result.rentalPricePerDay.toString(),
+        isForSale: result.isForSale,
+        isForRent: result.isForRent,
+        isForFork: result.isForFork,
+        forkRoyaltyBps: result.forkRoyaltyBps,
+        seller: result.seller,
+      };
+    } catch (error) {
+      handleChainError(error);
+    }
   }
 
   async list(dto: ListDto) {
-    const txHash = await this.mnemos.getClient().list(BigInt(dto.tokenId), {
-      price: BigInt(dto.price),
-      rentalPricePerDay: BigInt(dto.rentalPricePerDay),
-      isForSale: dto.isForSale,
-      isForRent: dto.isForRent,
-      isForFork: dto.isForFork,
-      forkRoyaltyBps: dto.forkRoyaltyBps,
-    });
-    return { txHash };
+    try {
+      const txHash = await this.repo.list(BigInt(dto.tokenId), {
+        price: BigInt(dto.price),
+        rentalPricePerDay: BigInt(dto.rentalPricePerDay),
+        isForSale: dto.isForSale,
+        isForRent: dto.isForRent,
+        isForFork: dto.isForFork,
+        forkRoyaltyBps: dto.forkRoyaltyBps,
+      });
+      return { txHash };
+    } catch (error) {
+      handleChainError(error);
+    }
   }
 
   async buy(tokenId: bigint) {
-    const txHash = await this.mnemos.getClient().buy(tokenId);
-    return { txHash };
+    try {
+      const txHash = await this.repo.buy(tokenId);
+      return { txHash };
+    } catch (error) {
+      handleChainError(error);
+    }
   }
 
   async rent(tokenId: bigint, dto: RentDto) {
-    const txHash = await this.mnemos.getClient().rent(tokenId, dto.durationDays);
-    return { txHash };
+    try {
+      const txHash = await this.repo.rent(tokenId, dto.durationDays);
+      return { txHash };
+    } catch (error) {
+      handleChainError(error);
+    }
   }
 
   async fork(tokenId: bigint) {
-    const txHash = await this.mnemos.getClient().fork(tokenId);
-    return { txHash };
+    try {
+      const txHash = await this.repo.fork(tokenId);
+      return { txHash };
+    } catch (error) {
+      handleChainError(error);
+    }
+  }
+
+  async payRoyalty(tokenId: bigint, dto: PayRoyaltyDto) {
+    try {
+      const txHash = await this.repo.payRoyalty(tokenId, BigInt(dto.amount));
+      return { txHash };
+    } catch (error) {
+      handleChainError(error);
+    }
   }
 }
