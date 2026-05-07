@@ -1,6 +1,6 @@
-# CLAUDE.md — Mnemos backend (SDK + reference agent)
+# CLAUDE.md — Mnemos backend (SDK + NestJS API + reference agent)
 
-The "backend" of Mnemos isn't a server — it's a TypeScript library that agent developers import into their own runtime, plus a reference agent that exercises the library end-to-end. There's no API server, no database — all state lives on chain.
+This repo contains three things: a TypeScript SDK library (`@mnemos/sdk`) that agent developers import, a NestJS REST API that the frontend consumes, and a reference agent that exercises the SDK end-to-end. All persistent state lives on chain — the API is stateless and wraps chain interactions.
 
 ## Multi-repo context
 
@@ -24,6 +24,14 @@ This repo depends on `mnemos-contract` for: deployed contract addresses (read fr
 
 Plus a convenience helper, `autoSnapshot`, that runs `snapshot()` on a configurable interval — this is what makes "5-line integration" possible from the agent developer's POV.
 
+`apps/api/` is the NestJS REST API. It wraps the SDK so the frontend doesn't need to hold a private key or talk directly to the chain for server-side operations. It has three modules:
+
+- **MnemosModule** (`@Global`) — initialises `MnemosClient` from env vars, provides it to all other modules.
+- **MarketplaceModule** — `GET /api/marketplace/listings/:tokenId`, `POST /api/marketplace/list|buy/:tokenId|rent/:tokenId|fork/:tokenId`.
+- **MemoryModule** — `POST /api/memory/snapshot`, `GET /api/memory/:tokenId/info`, `GET /api/memory/:tokenId`.
+
+The frontend still uses wagmi for user-signed transactions (buy/rent require the user's own wallet). The API handles server-side operations and read aggregation.
+
 `apps/reference-agent/` is a simulated DeFi yield explorer. It generates synthetic trade events every 2 seconds and accumulates them into an in-memory `AgentMemory` object, then uses `mnemos.autoSnapshot` with a 30-second interval (sped up from production daily/weekly cadence) so the demo video can show snapshots being minted in real time.
 
 The reference agent is a *demo*, not a product. It doesn't trade real markets. The point is making the snapshot flow visually compelling: trade → memory grows → snapshot triggers → token mints on chain → URI appears in 0G Explorer.
@@ -32,7 +40,9 @@ The reference agent is a *demo*, not a product. It doesn't trade real markets. T
 
 `viem` for chain interaction (typed, modern, lighter than ethers). `tweetnacl` + `tweetnacl-util` for symmetric encryption (small, audited, fine for MVP). `@0glabs/0g-ts-sdk` is a peer dependency — verify the actual package name and current API at https://docs.0g.ai/ before integrating.
 
-ESM-only output via `tsup`. The reference agent uses `"type": "module"` and `tsx` for direct TypeScript execution.
+SDK: ESM-only output via `tsup`. The reference agent uses `"type": "module"` and `tsx` for direct TypeScript execution.
+
+NestJS API: CommonJS (NestJS default). Uses `@nestjs/config` for env loading, `class-validator` + `class-transformer` for DTO validation. All bigint values are serialised as strings in API responses because JSON doesn't support bigint natively.
 
 ## Conventions
 
@@ -60,12 +70,16 @@ For the hackathon demo, the simplification is fine: the producer agent and the c
 ## Common commands
 
 ```bash
-pnpm sdk:build         # compile to dist/ via tsup, ESM + CJS + types
-pnpm sdk:dev           # watch mode
+pnpm sdk:build         # compile SDK to dist/ via tsup, ESM + CJS + types
+pnpm sdk:dev           # SDK watch mode
+pnpm api:dev           # start NestJS API in watch mode (port 3001)
+pnpm api:build         # compile NestJS API to dist/
+pnpm api:start         # run compiled NestJS API (production)
 pnpm agent:run         # start the reference agent (needs .env populated)
+pnpm build             # sdk:build then api:build
 ```
 
-The agent reads addresses from environment variables that are populated by the contract repo's `Deploy.s.sol`. Order matters: deploy contracts first, copy addresses to this repo's `.env`, then run the agent.
+All apps read addresses and keys from environment variables populated by the contract repo's `Deploy.s.sol`. Order matters: deploy contracts first, copy addresses to this repo's `.env`, then run the agent or API.
 
 ## Cross-repo workflow
 
@@ -81,6 +95,8 @@ For local anvil iteration: spin up anvil in the contract repo, deploy to it, poi
 ## When extending
 
 Adding a new on-chain method (e.g., calling a future `MemoryRegistry.attachAttestation`)? Update the relevant ABI literal at the top of `client.ts`, add the wrapper method, and export it. Keep the ABI literals minimal — only include functions actually called from JS.
+
+Adding a new API endpoint? Add a controller method + service method in the relevant module. DTOs go in `dto/` next to the module. Validate with `class-validator` decorators.
 
 Adding a new memory category convention? It's just a string in `MemoryMetadata.category` — no schema enforcement on chain. Document the convention in this file. Current canonical categories: `trading`, `research`, `support`, `gaming`, `social`. Add to this list when introducing a new one.
 
