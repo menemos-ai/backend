@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { MnemosModule } from './mnemos/mnemos.module';
 import { MarketplaceModule } from './marketplace/marketplace.module';
 import { MemoryModule } from './memory/memory.module';
+import { HealthModule } from './health/health.module';
 
 @Module({
   imports: [
@@ -10,6 +11,7 @@ import { MemoryModule } from './memory/memory.module';
     MnemosModule,
     MarketplaceModule,
     MemoryModule,
+    HealthModule,
   ],
 })
 export class AppModule {}

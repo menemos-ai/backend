@@ -3,6 +3,7 @@ import { handleChainError } from '../common/chain-error.util';
 import { MARKETPLACE_REPOSITORY, IMarketplaceRepository } from './marketplace.repository.interface';
 import type { ListDto } from './dto/list.dto';
 import type { RentDto } from './dto/rent.dto';
+import type { PayRoyaltyDto } from './dto/pay-royalty.dto';
 
 @Injectable()
 export class MarketplaceService {
@@ -70,4 +71,12 @@ export class MarketplaceService {
     }
   }
 
+  async payRoyalty(tokenId: bigint, dto: PayRoyaltyDto) {
+    try {
+      const txHash = await this.repo.payRoyalty(tokenId, BigInt(dto.amount));
+      return { txHash };
+    } catch (error) {
+      handleChainError(error);
+    }
+  }
 }
