@@ -41,6 +41,7 @@ export interface MemoryInfo {
 
 export interface MnemosClientConfig {
   privateKey: `0x${string}`;
+  chainId: number;
   rpcUrl: string;
   storageNodeUrl: string;
   registryAddress: `0x${string}`;

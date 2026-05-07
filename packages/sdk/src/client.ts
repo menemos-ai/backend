@@ -125,20 +125,6 @@ const MEMORY_MARKETPLACE_ABI = [
   },
 ] as const;
 
-// ─── Chain Definition ─────────────────────────────────────────────────────────
-// Verify chain ID and explorer URL at https://docs.0g.ai/
-const ogNewtonTestnet = defineChain({
-  id: 16602,
-  name: '0G Newton Testnet',
-  nativeCurrency: { name: '0G', symbol: 'A0GI', decimals: 18 },
-  rpcUrls: {
-    default: { http: ['https://evmrpc-testnet.0g.ai'] },
-  },
-  blockExplorers: {
-    default: { name: '0G Explorer', url: 'https://chainscan-newton.0g.ai' },
-  },
-});
-
 // ─── MnemosClient ─────────────────────────────────────────────────────────────
 
 export class MnemosClient {
@@ -152,14 +138,21 @@ export class MnemosClient {
     this.config = config;
     this.account = privateKeyToAccount(config.privateKey);
 
+    const chain = defineChain({
+      id: config.chainId,
+      name: '0G Network',
+      nativeCurrency: { name: '0G', symbol: 'A0GI', decimals: 18 },
+      rpcUrls: { default: { http: [config.rpcUrl] } },
+    });
+
     this.walletClient = createWalletClient({
       account: this.account,
-      chain: ogNewtonTestnet,
+      chain,
       transport: http(config.rpcUrl),
     });
 
     this.publicClient = createPublicClient({
-      chain: ogNewtonTestnet,
+      chain,
       transport: http(config.rpcUrl),
     });
   }

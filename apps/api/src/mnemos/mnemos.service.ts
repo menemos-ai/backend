@@ -11,6 +11,7 @@ export class MnemosService implements OnModuleInit {
   onModuleInit() {
     this.client = new MnemosClient({
       privateKey: this.config.getOrThrow<`0x${string}`>('AGENT_PRIVATE_KEY'),
+      chainId: parseInt(this.config.getOrThrow('OG_CHAIN_ID'), 10),
       rpcUrl: this.config.getOrThrow('OG_RPC_URL'),
       storageNodeUrl: this.config.getOrThrow('OG_STORAGE_NODE'),
       registryAddress: this.config.getOrThrow<`0x${string}`>('REGISTRY_ADDRESS'),
