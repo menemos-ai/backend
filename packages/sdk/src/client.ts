@@ -26,26 +26,26 @@ import type {
 
 const MEMORY_REGISTRY_ABI = [
   {
-    name: 'mintRoot',
+    name: 'mintMemory',
     type: 'function',
     inputs: [
       { name: 'contentHash', type: 'bytes32' },
-      { name: 'storageUri', type: 'string' },
-      { name: 'parent', type: 'uint256' },
+      { name: 'storageURI', type: 'string' },
     ],
     outputs: [{ name: 'tokenId', type: 'uint256' }],
     stateMutability: 'nonpayable',
   },
   {
-    name: 'getMemoryInfo',
+    // Returns MemorySnapshot struct: contentHash, storageURI, parentTokenId, creator, createdAt
+    name: 'getSnapshot',
     type: 'function',
     inputs: [{ name: 'tokenId', type: 'uint256' }],
     outputs: [
       { name: 'contentHash', type: 'bytes32' },
-      { name: 'storageUri', type: 'string' },
+      { name: 'storageURI', type: 'string' },
+      { name: 'parentTokenId', type: 'uint256' },
       { name: 'creator', type: 'address' },
-      { name: 'parent', type: 'uint256' },
-      { name: 'timestamp', type: 'uint256' },
+      { name: 'createdAt', type: 'uint256' },
     ],
     stateMutability: 'view',
   },
@@ -56,7 +56,7 @@ const MEMORY_REGISTRY_ABI = [
       { name: 'tokenId', type: 'uint256', indexed: true },
       { name: 'creator', type: 'address', indexed: true },
       { name: 'contentHash', type: 'bytes32', indexed: false },
-      { name: 'storageUri', type: 'string', indexed: false },
+      { name: 'storageURI', type: 'string', indexed: false },
     ],
   },
 ] as const;
@@ -67,12 +67,10 @@ const MEMORY_MARKETPLACE_ABI = [
     type: 'function',
     inputs: [
       { name: 'tokenId', type: 'uint256' },
-      { name: 'price', type: 'uint256' },
-      { name: 'rentalPricePerDay', type: 'uint256' },
-      { name: 'isForSale', type: 'bool' },
-      { name: 'isForRent', type: 'bool' },
-      { name: 'isForFork', type: 'bool' },
-      { name: 'forkRoyaltyBps', type: 'uint16' },
+      { name: 'buyPrice', type: 'uint256' },
+      { name: 'rentPricePerDay', type: 'uint256' },
+      { name: 'forkPrice', type: 'uint256' },
+      { name: 'royaltyBps', type: 'uint96' },
     ],
     outputs: [],
     stateMutability: 'nonpayable',
@@ -97,14 +95,18 @@ const MEMORY_MARKETPLACE_ABI = [
   {
     name: 'fork',
     type: 'function',
-    inputs: [{ name: 'tokenId', type: 'uint256' }],
-    outputs: [{ name: 'newTokenId', type: 'uint256' }],
+    inputs: [
+      { name: 'parentTokenId', type: 'uint256' },
+      { name: 'contentHash', type: 'bytes32' },
+      { name: 'storageURI', type: 'string' },
+    ],
+    outputs: [{ name: 'childTokenId', type: 'uint256' }],
     stateMutability: 'payable',
   },
   {
     name: 'payRoyalty',
     type: 'function',
-    inputs: [{ name: 'parentTokenId', type: 'uint256' }],
+    inputs: [{ name: 'childTokenId', type: 'uint256' }],
     outputs: [],
     stateMutability: 'payable',
   },
@@ -113,13 +115,11 @@ const MEMORY_MARKETPLACE_ABI = [
     type: 'function',
     inputs: [{ name: 'tokenId', type: 'uint256' }],
     outputs: [
-      { name: 'price', type: 'uint256' },
-      { name: 'rentalPricePerDay', type: 'uint256' },
-      { name: 'isForSale', type: 'bool' },
-      { name: 'isForRent', type: 'bool' },
-      { name: 'isForFork', type: 'bool' },
-      { name: 'forkRoyaltyBps', type: 'uint16' },
       { name: 'seller', type: 'address' },
+      { name: 'buyPrice', type: 'uint256' },
+      { name: 'rentPricePerDay', type: 'uint256' },
+      { name: 'forkPrice', type: 'uint256' },
+      { name: 'royaltyBps', type: 'uint96' },
     ],
     stateMutability: 'view',
   },
@@ -167,19 +167,19 @@ export class MnemosClient {
     const txHash = await (this.walletClient as any).writeContract({
       address: this.config.registryAddress,
       abi: MEMORY_REGISTRY_ABI,
-      functionName: 'mintRoot',
-      args: [contentHash, storageUri, parentTokenId ?? 0n],
+      functionName: 'mintMemory',
+      args: [contentHash, storageUri],
     });
 
-    const receipt = await this.publicClient.waitForTransactionReceipt({ hash: txHash });
-
-    const mintedLog = receipt.logs.find((log) => {
-      try {
-        return log.topics[0] !== undefined;
-      } catch {
-        return false;
-      }
+    const receipt = await this.publicClient.waitForTransactionReceipt({
+      hash: txHash,
+      timeout: 120_000,
+      pollingInterval: 3_000,
     });
+
+    // MemoryMinted(uint256 indexed tokenId, address indexed creator, bytes32, string)
+    const MEMORY_MINTED_TOPIC = '0x6a94f063b9e2ac347622f0dcce749dbbf6232caf048066debb3f06ae77504bd9';
+    const mintedLog = receipt.logs.find((log) => log.topics[0] === MEMORY_MINTED_TOPIC);
 
     const tokenId = mintedLog?.topics[1] ? BigInt(mintedLog.topics[1]) : 0n;
 
@@ -197,15 +197,7 @@ export class MnemosClient {
       address: this.config.marketplaceAddress,
       abi: MEMORY_MARKETPLACE_ABI,
       functionName: 'list',
-      args: [
-        tokenId,
-        terms.price,
-        terms.rentalPricePerDay,
-        terms.isForSale,
-        terms.isForRent,
-        terms.isForFork,
-        terms.forkRoyaltyBps,
-      ],
+      args: [tokenId, terms.buyPrice, terms.rentPricePerDay, terms.forkPrice, BigInt(terms.royaltyBps)],
     });
   }
 
@@ -216,13 +208,13 @@ export class MnemosClient {
       abi: MEMORY_MARKETPLACE_ABI,
       functionName: 'buy',
       args: [tokenId],
-      value: listing.price,
+      value: listing.buyPrice,
     });
   }
 
   async rent(tokenId: bigint, durationDays: number): Promise<`0x${string}`> {
     const listing = await this.getListing(tokenId);
-    const totalCost = listing.rentalPricePerDay * BigInt(durationDays);
+    const totalCost = listing.rentPricePerDay * BigInt(durationDays);
     return (this.walletClient as any).writeContract({
       address: this.config.marketplaceAddress,
       abi: MEMORY_MARKETPLACE_ABI,
@@ -232,13 +224,18 @@ export class MnemosClient {
     });
   }
 
-  async fork(tokenId: bigint): Promise<`0x${string}`> {
-    // TODO: fork() ABI is payable but no value is passed here — verify contract behavior
+  async fork(
+    parentTokenId: bigint,
+    contentHash: `0x${string}`,
+    storageURI: string,
+    value: bigint,
+  ): Promise<`0x${string}`> {
     return (this.walletClient as any).writeContract({
       address: this.config.marketplaceAddress,
       abi: MEMORY_MARKETPLACE_ABI,
       functionName: 'fork',
-      args: [tokenId],
+      args: [parentTokenId, contentHash, storageURI],
+      value,
     });
   }
 
@@ -253,13 +250,11 @@ export class MnemosClient {
   }
 
   async getListing(tokenId: bigint): Promise<{
-    price: bigint;
-    rentalPricePerDay: bigint;
-    isForSale: boolean;
-    isForRent: boolean;
-    isForFork: boolean;
-    forkRoyaltyBps: number;
     seller: `0x${string}`;
+    buyPrice: bigint;
+    rentPricePerDay: bigint;
+    forkPrice: bigint;
+    royaltyBps: number;
   }> {
     const result = await this.publicClient.readContract({
       address: this.config.marketplaceAddress,
@@ -267,20 +262,21 @@ export class MnemosClient {
       functionName: 'getListing',
       args: [tokenId],
     });
-    const [price, rentalPricePerDay, isForSale, isForRent, isForFork, forkRoyaltyBps, seller] =
-      result as unknown as [bigint, bigint, boolean, boolean, boolean, number, `0x${string}`];
-    return { price, rentalPricePerDay, isForSale, isForRent, isForFork, forkRoyaltyBps, seller };
+    const [seller, buyPrice, rentPricePerDay, forkPrice, royaltyBps] =
+      result as unknown as [`0x${string}`, bigint, bigint, bigint, number];
+    return { seller, buyPrice, rentPricePerDay, forkPrice, royaltyBps };
   }
 
   async getMemoryInfo(tokenId: bigint): Promise<MemoryInfo> {
     const result = await this.publicClient.readContract({
       address: this.config.registryAddress,
       abi: MEMORY_REGISTRY_ABI,
-      functionName: 'getMemoryInfo',
+      functionName: 'getSnapshot',
       args: [tokenId],
     });
-    const [contentHash, storageUri, creator, parent, timestamp] =
-      result as unknown as [`0x${string}`, string, `0x${string}`, bigint, bigint];
+    // getSnapshot returns struct: contentHash, storageURI, parentTokenId, creator, createdAt
+    const [contentHash, storageUri, parent, creator, timestamp] =
+      result as unknown as [`0x${string}`, string, bigint, `0x${string}`, bigint];
     return { tokenId, contentHash, storageUri, creator, parent, timestamp };
   }
 
@@ -343,7 +339,7 @@ export class MnemosClient {
   // ─── 0G Storage ─────────────────────────────────────────────────────────────
 
   private async uploadToStorage(data: Uint8Array): Promise<string> {
-    const { Indexer, MemData } = await import('@0glabs/0g-ts-sdk');
+    const { Indexer, MemData } = await import('@0gfoundation/0g-ts-sdk');
 
     // The 0g-ts-sdk requires an ethers-shaped Signer. We satisfy that interface
     // with a thin adapter that delegates all blockchain calls to viem so no
@@ -361,11 +357,12 @@ export class MnemosClient {
       throw new Error(`0G Storage upload failed: ${err.message}`);
     }
 
-    return `0g://${result.rootHash}`;
+    const rootHash = 'rootHash' in result ? result.rootHash : result.rootHashes[0];
+    return `0g://${rootHash}`;
   }
 
   private async downloadFromStorage(uri: string): Promise<Uint8Array> {
-    const { Indexer } = await import('@0glabs/0g-ts-sdk');
+    const { Indexer } = await import('@0gfoundation/0g-ts-sdk');
     const { tmpdir } = await import('os');
     const { readFile, unlink } = await import('fs/promises');
 

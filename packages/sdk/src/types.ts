@@ -14,12 +14,10 @@ export interface MemoryBundle {
 }
 
 export interface ListingTerms {
-  price: bigint;
-  rentalPricePerDay: bigint;
-  isForSale: boolean;
-  isForRent: boolean;
-  isForFork: boolean;
-  forkRoyaltyBps: number;
+  buyPrice: bigint;
+  rentPricePerDay: bigint;
+  forkPrice: bigint;
+  royaltyBps: number;
 }
 
 export interface SnapshotResult {
@@ -46,6 +44,8 @@ export interface MnemosClientConfig {
   storageNodeUrl: string;
   registryAddress: `0x${string}`;
   marketplaceAddress: `0x${string}`;
+  /** Skip real 0G Storage upload and use a stub URI — useful for demo/testing */
+  storageMock?: boolean;
 }
 
 export interface AutoSnapshotOptions {

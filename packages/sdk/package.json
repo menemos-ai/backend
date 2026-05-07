@@ -24,10 +24,10 @@
     "tweetnacl-util": "^0.15.1"
   },
   "peerDependencies": {
-    "@0glabs/0g-ts-sdk": "*"
+    "@0gfoundation/0g-ts-sdk": "*"
   },
   "peerDependenciesMeta": {
-    "@0glabs/0g-ts-sdk": {
+    "@0gfoundation/0g-ts-sdk": {
       "optional": true
     }
   },
