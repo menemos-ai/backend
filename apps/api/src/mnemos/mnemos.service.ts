@@ -1,6 +1,6 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { MnemosClient } from '@mnemos/sdk';
+import { MnemosClient } from '@mnemos-sdk/sdk';
 
 @Injectable()
 export class MnemosService implements OnModuleInit {

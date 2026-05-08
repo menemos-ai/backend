@@ -14,7 +14,7 @@ importers:
 
   apps/api:
     dependencies:
-      '@mnemos/sdk':
+      '@mnemos-sdk/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
       '@nestjs/common':
@@ -81,7 +81,7 @@ importers:
 
   apps/reference-agent:
     dependencies:
-      '@mnemos/sdk':
+      '@mnemos-sdk/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
       dotenv:

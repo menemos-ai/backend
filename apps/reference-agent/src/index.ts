@@ -1,6 +1,6 @@
 import 'dotenv/config';
-import { MnemosClient } from '@mnemos/sdk';
-import type { MemoryBundle } from '@mnemos/sdk';
+import { MnemosClient } from '@mnemos-sdk/sdk';
+import type { MemoryBundle } from '@mnemos-sdk/sdk';
 
 interface TradeEvent {
   timestamp: number;

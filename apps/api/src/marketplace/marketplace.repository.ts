@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { MnemosService } from '../mnemos/mnemos.service';
-import type { ListingTerms } from '@mnemos/sdk';
+import type { ListingTerms } from '@mnemos-sdk/sdk';
 import type { IMarketplaceRepository } from './marketplace.repository.interface';
 
 @Injectable()

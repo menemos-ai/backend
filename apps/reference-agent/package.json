@@ -7,7 +7,7 @@
     "start": "tsx src/index.ts"
   },
   "dependencies": {
-    "@mnemos/sdk": "workspace:*",
+    "@mnemos-sdk/sdk": "workspace:*",
     "dotenv": "^16.4.0"
   },
   "devDependencies": {

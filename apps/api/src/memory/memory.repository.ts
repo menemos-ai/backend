@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { MnemosService } from '../mnemos/mnemos.service';
-import type { MemoryBundle } from '@mnemos/sdk';
+import type { MemoryBundle } from '@mnemos-sdk/sdk';
 import type { IMemoryRepository } from './memory.repository.interface';
 
 @Injectable()

@@ -1,4 +1,4 @@
-import type { ListingTerms, SnapshotResult, MemoryBundle, MemoryInfo } from '@mnemos/sdk';
+import type { ListingTerms, SnapshotResult, MemoryBundle, MemoryInfo } from '@mnemos-sdk/sdk';
 
 export const MARKETPLACE_REPOSITORY = Symbol('IMarketplaceRepository');
 

@@ -1,6 +1,6 @@
 import { IsObject, IsOptional, IsString } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import type { MemoryMetadata } from '@mnemos/sdk';
+import type { MemoryMetadata } from '@mnemos-sdk/sdk';
 
 export class SnapshotDto {
   @ApiProperty({

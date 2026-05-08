@@ -1,22 +1,39 @@
 {
-  "name": "@mnemos/sdk",
-  "version": "0.1.0",
+  "name": "@mnemos-sdk/sdk",
+  "version": "0.1.1",
+  "description": "SDK for storing, registering, and trading agent memory on 0G Storage and EVM",
+  "license": "MIT",
+  "keywords": [
+    "ai-agent",
+    "memory",
+    "0g-storage",
+    "blockchain",
+    "evm",
+    "viem"
+  ],
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
-      "require": "./dist/index.cjs",
-      "types": "./dist/index.d.ts"
+      "require": "./dist/index.cjs"
     }
   },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
+    "prepublishOnly": "pnpm build",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest"
+  },
+  "engines": {
+    "node": ">=20"
   },
   "dependencies": {
     "viem": "^2.9.0",

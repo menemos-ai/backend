@@ -1,4 +1,4 @@
-import type { MemoryBundle, MemoryInfo, SnapshotResult } from '@mnemos/sdk';
+import type { MemoryBundle, MemoryInfo, SnapshotResult } from '@mnemos-sdk/sdk';
 
 export const MEMORY_REPOSITORY = Symbol('IMemoryRepository');
 
