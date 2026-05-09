@@ -1,13 +1,16 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
   ApiParam,
   ApiResponse,
   ApiBody,
+  ApiHeader,
 } from '@nestjs/swagger';
 import { MemoryService } from './memory.service';
 import { SnapshotDto } from './dto/snapshot.dto';
+import { WalletAuthGuard } from '../common/wallet-auth.guard';
+import { ParseBigIntPipe } from '../common/parse-bigint.pipe';
 
 @ApiTags('Memory')
 @Controller('memory')
@@ -65,19 +68,23 @@ export class MemoryController {
   })
   @ApiResponse({ status: 404, description: 'Token not found on chain' })
   @ApiResponse({ status: 500, description: 'RPC or chain error' })
-  getMemoryInfo(@Param('tokenId') tokenId: string) {
-    return this.memory.getMemoryInfo(BigInt(tokenId));
+  getMemoryInfo(@Param('tokenId', ParseBigIntPipe) tokenId: bigint) {
+    return this.memory.getMemoryInfo(tokenId);
   }
 
   @Get(':tokenId')
+  @UseGuards(WalletAuthGuard)
   @ApiOperation({
     summary: 'Download and decrypt a memory bundle',
     description:
       'Fetches the encrypted bundle from 0G Storage using the URI stored on-chain, ' +
-      'decrypts it with the server wallet key, and returns the original `MemoryBundle` JSON. ' +
-      'Note: decryption only succeeds if the server wallet matches the creator\'s wallet.',
+      'decrypts it using the v2 content-hash key scheme, and returns the original `MemoryBundle` JSON. ' +
+      'Requires wallet signature headers to verify the caller has access (owner or active renter).',
   })
   @ApiParam({ name: 'tokenId', description: 'Memory token ID', example: '1' })
+  @ApiHeader({ name: 'x-wallet-address', description: 'EIP-55 checksummed caller address', required: true })
+  @ApiHeader({ name: 'x-wallet-signature', description: 'EIP-191 personal_sign of challenge message', required: true })
+  @ApiHeader({ name: 'x-wallet-timestamp', description: 'Unix timestamp in seconds (5-minute window)', required: true })
   @ApiResponse({
     status: 200,
     description: 'Decrypted memory bundle',
@@ -88,9 +95,13 @@ export class MemoryController {
       },
     },
   })
+  @ApiResponse({ status: 403, description: 'Missing or invalid wallet signature, or caller lacks access' })
   @ApiResponse({ status: 404, description: 'Token not found on chain' })
   @ApiResponse({ status: 500, description: 'Decryption failed or storage unavailable' })
-  loadMemory(@Param('tokenId') tokenId: string) {
-    return this.memory.loadMemory(BigInt(tokenId));
+  loadMemory(
+    @Param('tokenId', ParseBigIntPipe) tokenId: bigint,
+    @Req() req: { walletAddress?: `0x${string}` },
+  ) {
+    return this.memory.loadMemory(tokenId, req.walletAddress);
   }
 }

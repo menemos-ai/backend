@@ -15,7 +15,14 @@ export class MemoryRepository implements IMemoryRepository {
     return this.mnemos.getClient().getMemoryInfo(tokenId);
   }
 
-  loadMemory(tokenId: bigint) {
-    return this.mnemos.getClient().loadMemory(tokenId);
+  async loadMemory(tokenId: bigint, callerAddress?: `0x${string}`) {
+    const client = this.mnemos.getClient();
+    if (callerAddress) {
+      const allowed = await client.hasAccess(tokenId, callerAddress);
+      if (!allowed) {
+        throw new Error('Access denied');
+      }
+    }
+    return client.loadMemory(tokenId);
   }
 }

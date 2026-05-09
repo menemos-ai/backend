@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { ForbiddenException, Inject, Injectable } from '@nestjs/common';
 import { handleChainError } from '../common/chain-error.util';
 import { MEMORY_REPOSITORY, IMemoryRepository } from './memory.repository.interface';
 import type { SnapshotDto } from './dto/snapshot.dto';
@@ -43,10 +43,13 @@ export class MemoryService {
     }
   }
 
-  async loadMemory(tokenId: bigint) {
+  async loadMemory(tokenId: bigint, callerAddress?: `0x${string}`) {
     try {
-      return this.repo.loadMemory(tokenId);
+      return await this.repo.loadMemory(tokenId, callerAddress);
     } catch (error) {
+      if (error instanceof Error && error.message.toLowerCase().includes('access denied')) {
+        throw new ForbiddenException('You do not have access to this memory token');
+      }
       handleChainError(error);
     }
   }

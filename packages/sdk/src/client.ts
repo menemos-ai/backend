@@ -7,10 +7,11 @@ import {
   hexToBytes,
   toHex,
   defineChain,
+  getAddress,
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import * as nacl from 'tweetnacl';
-import { encodeUTF8, decodeUTF8, encodeBase64 } from 'tweetnacl-util';
+import { encodeUTF8, decodeUTF8 } from 'tweetnacl-util';
 import type {
   MnemosClientConfig,
   MemoryBundle,
@@ -47,6 +48,14 @@ const MEMORY_REGISTRY_ABI = [
       { name: 'creator', type: 'address' },
       { name: 'createdAt', type: 'uint256' },
     ],
+    stateMutability: 'view',
+  },
+  {
+    // ERC-721 ownerOf — reverts if token does not exist
+    name: 'ownerOf',
+    type: 'function',
+    inputs: [{ name: 'tokenId', type: 'uint256' }],
+    outputs: [{ name: 'owner', type: 'address' }],
     stateMutability: 'view',
   },
   {
@@ -123,7 +132,23 @@ const MEMORY_MARKETPLACE_ABI = [
     ],
     stateMutability: 'view',
   },
+  {
+    name: 'isCurrentRenter',
+    type: 'function',
+    inputs: [
+      { name: 'tokenId', type: 'uint256' },
+      { name: 'renter', type: 'address' },
+    ],
+    outputs: [{ name: '', type: 'bool' }],
+    stateMutability: 'view',
+  },
 ] as const;
+
+// ─── URI scheme ───────────────────────────────────────────────────────────────
+// v1: 0g://<rootHash>        — key derived from producer wallet (legacy, unreadable by consumers)
+// v2: v2:0g://<rootHash>     — key derived from plaintext contentHash (readable by consumers)
+
+const V2_PREFIX = 'v2:';
 
 // ─── MnemosClient ─────────────────────────────────────────────────────────────
 
@@ -159,16 +184,22 @@ export class MnemosClient {
 
   async snapshot(bundle: MemoryBundle, parentTokenId?: bigint): Promise<SnapshotResult> {
     const json = JSON.stringify(bundle);
-    const encrypted = this.encrypt(json);
+
+    // v2 key scheme: contentHash = keccak256(plaintext) — used as both the
+    // on-chain content identifier AND the symmetric encryption key seed.
+    // This lets any holder of tokenId derive the key from the public on-chain data.
+    const contentHash = keccak256(toHex(decodeUTF8(json)));
+    const key = this.deriveContentKey(contentHash);
+    const encrypted = this.encrypt(json, key);
 
     const storageUri = await this.uploadToStorage(encrypted);
-    const contentHash = keccak256(toHex(encrypted));
+    const versionedUri = `${V2_PREFIX}${storageUri}`;
 
     const txHash = await (this.walletClient as any).writeContract({
       address: this.config.registryAddress,
       abi: MEMORY_REGISTRY_ABI,
       functionName: 'mintMemory',
-      args: [contentHash, storageUri],
+      args: [contentHash, versionedUri],
     });
 
     const receipt = await this.publicClient.waitForTransactionReceipt({
@@ -186,7 +217,7 @@ export class MnemosClient {
     return {
       tokenId,
       contentHash,
-      storageUri,
+      storageUri: versionedUri,
       txHash,
       timestamp: Date.now(),
     };
@@ -283,8 +314,57 @@ export class MnemosClient {
   async loadMemory(tokenId: bigint): Promise<MemoryBundle> {
     const info = await this.getMemoryInfo(tokenId);
     const encrypted = await this.downloadFromStorage(info.storageUri);
-    const decrypted = this.decrypt(encrypted);
+
+    // v2 tokens: key derived from the on-chain contentHash (keccak256 of plaintext)
+    // v1 tokens: key derived from the producer's wallet address — unreadable by consumers
+    if (info.storageUri.startsWith(V2_PREFIX)) {
+      const key = this.deriveContentKey(info.contentHash);
+      const decrypted = this.decrypt(encrypted, key);
+      return JSON.parse(decrypted) as MemoryBundle;
+    }
+
+    // v1 fallback: decrypt with the server-side wallet key (only works for the producer)
+    const key = this.deriveWalletKey();
+    const decrypted = this.decrypt(encrypted, key);
     return JSON.parse(decrypted) as MemoryBundle;
+  }
+
+  /**
+   * Returns true if callerAddress currently has access to tokenId via buy or rent.
+   * Uses Promise.allSettled so that ownerOf revert (non-existent token) is treated
+   * as "not owner" rather than an unhandled rejection.
+   */
+  async hasAccess(tokenId: bigint, callerAddress: `0x${string}`): Promise<boolean> {
+    const normalizedCaller = getAddress(callerAddress);
+
+    const [ownerResult, renterResult] = await Promise.allSettled([
+      this.publicClient.readContract({
+        address: this.config.registryAddress,
+        abi: MEMORY_REGISTRY_ABI,
+        functionName: 'ownerOf',
+        args: [tokenId],
+      }),
+      this.publicClient.readContract({
+        address: this.config.marketplaceAddress,
+        abi: MEMORY_MARKETPLACE_ABI,
+        functionName: 'isCurrentRenter',
+        args: [tokenId, normalizedCaller],
+      }),
+    ]);
+
+    let isOwner = false;
+    if (ownerResult.status === 'fulfilled') {
+      try {
+        isOwner = getAddress(ownerResult.value as `0x${string}`) === normalizedCaller;
+      } catch {
+        // ABI mismatch or non-address return value — treat as not owner
+      }
+    }
+
+    const isRenter =
+      renterResult.status === 'fulfilled' && renterResult.value === true;
+
+    return isOwner || isRenter;
   }
 
   autoSnapshot(options: AutoSnapshotOptions): () => void {
@@ -308,8 +388,7 @@ export class MnemosClient {
 
   // ─── Private helpers ───────────────────────────────────────────────────────
 
-  private encrypt(data: string): Uint8Array {
-    const key = this.deriveSymmetricKey();
+  private encrypt(data: string, key: Uint8Array): Uint8Array {
     const nonce = nacl.randomBytes(nacl.secretbox.nonceLength);
     // decodeUTF8: string → Uint8Array (tweetnacl-util naming is inverted vs intuition)
     const message = decodeUTF8(data);
@@ -320,8 +399,7 @@ export class MnemosClient {
     return result;
   }
 
-  private decrypt(data: Uint8Array): string {
-    const key = this.deriveSymmetricKey();
+  private decrypt(data: Uint8Array, key: Uint8Array): string {
     const nonce = data.slice(0, nacl.secretbox.nonceLength);
     const box = data.slice(nacl.secretbox.nonceLength);
     const decrypted = nacl.secretbox.open(box, nonce, key);
@@ -330,9 +408,18 @@ export class MnemosClient {
     return encodeUTF8(decrypted);
   }
 
-  private deriveSymmetricKey(): Uint8Array {
+  // v2 key: first 32 bytes of keccak256(plaintext) = the on-chain contentHash.
+  // DESIGN NOTE: This provides API-enforced access only, NOT cryptographic enforcement.
+  // Anyone with direct chain + 0G Storage access can derive the key from the public
+  // contentHash without going through the API. Production upgrade: TEE/threshold key
+  // escrow so the key is released atomically with on-chain payment settlement.
+  private deriveContentKey(contentHash: `0x${string}`): Uint8Array {
+    return hexToBytes(contentHash).slice(0, 32);
+  }
+
+  // v1 key: derived from this client's wallet address. Only the producer can decrypt.
+  private deriveWalletKey(): Uint8Array {
     const hash = keccak256(encodePacked(['address'], [this.account.address]));
-    // WARNING: deterministic key — see CLAUDE.md encryption design for v2 plan
     return hexToBytes(hash).slice(0, 32);
   }
 
@@ -366,9 +453,13 @@ export class MnemosClient {
     const { tmpdir } = await import('os');
     const { readFile, unlink } = await import('fs/promises');
 
+    // Strip versioning prefix before passing the raw URI to the storage layer
+    const rawUri = uri.startsWith(V2_PREFIX) ? uri.slice(V2_PREFIX.length) : uri;
+
     // 0g-ts-sdk v0.3.3 writes to a file path; no in-memory download API exists.
-    const rootHash = uri.startsWith('0g://') ? uri.slice(5) : uri;
-    const tmpPath = `${tmpdir()}/mnemos-${Date.now()}-${rootHash.slice(0, 8)}`;
+    const rootHash = rawUri.startsWith('0g://') ? rawUri.slice(5) : rawUri;
+    const { randomBytes } = await import('crypto');
+    const tmpPath = `${tmpdir()}/mnemos-${Date.now()}-${randomBytes(4).toString('hex')}-${rootHash.slice(0, 8)}`;
 
     const indexer = new Indexer(this.config.storageNodeUrl);
     const err = await indexer.download(rootHash, tmpPath, false);
