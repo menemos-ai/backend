@@ -12,6 +12,8 @@ const mocks = vi.hoisted(() => ({
   accountAddress: '0xdeadbeef00000000000000000000000000000001' as `0x${string}`,
   indexerUpload: vi.fn().mockResolvedValue([{ rootHash: 'abc123' }, null]),
   indexerDownload: vi.fn().mockResolvedValue(null),
+  // MemData constructor spy — used to capture encrypted bytes passed from snapshot()
+  MemData: vi.fn((data: Uint8Array) => ({ _bytes: data })),
 }));
 
 vi.mock('viem', async (importOriginal) => {
@@ -42,7 +44,8 @@ vi.mock('@0gfoundation/0g-ts-sdk', () => ({
     upload: mocks.indexerUpload,
     download: mocks.indexerDownload,
   })),
-  MemData: vi.fn(() => ({})),
+  // Use hoisted MemData so tests can inspect constructor calls (to capture encrypted bytes).
+  MemData: mocks.MemData,
 }));
 
 // ─── Test fixtures ────────────────────────────────────────────────────────────
@@ -131,6 +134,25 @@ describe('MnemosClient', () => {
         contentHash: expect.stringMatching(/^0x/),
         timestamp: expect.any(Number),
       });
+    });
+
+    it('stores v2: prefix in storageUri and on-chain arg', async () => {
+      const result = await client.snapshot(MOCK_BUNDLE);
+
+      expect(result.storageUri).toMatch(/^v2:0g:\/\//);
+
+      const writeArgs = (mocks.writeContract.mock.calls[0] as unknown as [{ args: unknown[] }])[0].args;
+      expect(writeArgs[1]).toMatch(/^v2:0g:\/\//);
+    });
+
+    it('derives contentHash from plaintext (not from encrypted bytes)', async () => {
+      const result = await client.snapshot(MOCK_BUNDLE);
+
+      // Verify contentHash matches storageUri arg (same value stored on-chain)
+      const writeArgs = (mocks.writeContract.mock.calls[0] as unknown as [{ args: unknown[] }])[0].args;
+      expect(writeArgs[0]).toBe(result.contentHash);
+      // contentHash must be a 32-byte hex value (0x + 64 hex chars)
+      expect(result.contentHash).toMatch(/^0x[0-9a-f]{64}$/i);
     });
 
     it('extracts tokenId from receipt log topic', async () => {
@@ -303,6 +325,99 @@ describe('MnemosClient', () => {
 
       expect(mocks.readContract).toHaveBeenCalledWith(
         expect.objectContaining({ functionName: 'getSnapshot', args: [7n] }),
+      );
+    });
+
+    it('decrypts v2 token using contentHash key', async () => {
+      // Step 1: snapshot to produce real encrypted bytes and contentHash
+      mocks.waitForTransactionReceipt.mockResolvedValue(makeReceiptWithTokenId(1n));
+      const snapshotResult = await client.snapshot(MOCK_BUNDLE);
+
+      // Step 2: capture encrypted bytes from the MemData constructor call
+      const encryptedBytes: Uint8Array = mocks.MemData.mock.calls[0][0];
+
+      // Step 3: mock getSnapshot to return the v2 token info
+      mocks.readContract.mockResolvedValue([
+        snapshotResult.contentHash,
+        snapshotResult.storageUri, // v2:0g://...
+        0n,
+        '0xcreator0000000000000000000000000000001' as `0x${string}`,
+        1234567890n,
+      ]);
+
+      // Step 4: mock download to write the captured encrypted bytes to the tmp file
+      mocks.indexerDownload.mockImplementation(
+        async (_rootHash: string, tmpPath: string) => {
+          const { writeFile } = await import('fs/promises');
+          await writeFile(tmpPath, encryptedBytes);
+          return null;
+        },
+      );
+
+      const bundle = await client.loadMemory(1n);
+      expect(bundle).toEqual(MOCK_BUNDLE);
+    });
+  });
+
+  describe('hasAccess()', () => {
+    // All-digit addresses need no EIP-55 casing adjustments and are always valid
+    const CALLER = '0x0000000000000000000000000000000000000002' as `0x${string}`;
+
+    it('returns true when caller is the token owner', async () => {
+      mocks.readContract
+        .mockResolvedValueOnce(CALLER)  // ownerOf returns caller
+        .mockResolvedValueOnce(false);  // isCurrentRenter = false
+
+      const result = await client.hasAccess(5n, CALLER);
+      expect(result).toBe(true);
+    });
+
+    it('returns true when caller is the current renter', async () => {
+      mocks.readContract
+        .mockRejectedValueOnce(new Error('ERC721: invalid token ID')) // ownerOf reverts
+        .mockResolvedValueOnce(true); // isCurrentRenter = true
+
+      const result = await client.hasAccess(5n, CALLER);
+      expect(result).toBe(true);
+    });
+
+    it('returns false when caller is neither owner nor renter', async () => {
+      mocks.readContract
+        .mockResolvedValueOnce('0x0000000000000000000000000000000000000003') // different owner
+        .mockResolvedValueOnce(false); // isCurrentRenter = false
+
+      const result = await client.hasAccess(5n, CALLER);
+      expect(result).toBe(false);
+    });
+
+    it('returns false (not an error) when ownerOf reverts and not renter', async () => {
+      mocks.readContract
+        .mockRejectedValueOnce(new Error('ERC721: invalid token ID')) // ownerOf reverts
+        .mockResolvedValueOnce(false); // isCurrentRenter = false
+
+      const result = await client.hasAccess(5n, CALLER);
+      expect(result).toBe(false);
+    });
+
+    it('checks both ownerOf on registry and isCurrentRenter on marketplace', async () => {
+      mocks.readContract
+        .mockResolvedValueOnce(CALLER)
+        .mockResolvedValueOnce(false);
+
+      await client.hasAccess(5n, CALLER);
+
+      expect(mocks.readContract).toHaveBeenCalledWith(
+        expect.objectContaining({
+          address: TEST_CONFIG.registryAddress,
+          functionName: 'ownerOf',
+          args: [5n],
+        }),
+      );
+      expect(mocks.readContract).toHaveBeenCalledWith(
+        expect.objectContaining({
+          address: TEST_CONFIG.marketplaceAddress,
+          functionName: 'isCurrentRenter',
+        }),
       );
     });
   });
