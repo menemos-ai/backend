@@ -1,6 +1,6 @@
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { MnemosClient } from './client.js';
-import type { MemoryBundle, ListingTerms } from './types.js';
+import type { MemoryBundle, ListingTerms, SnapshotResult } from './types.js';
 
 // ─── Hoisted mocks ────────────────────────────────────────────────────────────
 // vi.hoisted runs before vi.mock factories, so these are safely accessible inside them.
@@ -10,6 +10,8 @@ const mocks = vi.hoisted(() => ({
   readContract: vi.fn(),
   waitForTransactionReceipt: vi.fn(),
   accountAddress: '0xdeadbeef00000000000000000000000000000001' as `0x${string}`,
+  indexerUpload: vi.fn().mockResolvedValue([{ rootHash: 'abc123' }, null]),
+  indexerDownload: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock('viem', async (importOriginal) => {
@@ -33,10 +35,21 @@ vi.mock('viem/accounts', async (importOriginal) => {
   };
 });
 
+// Prevent @0gfoundation/0g-ts-sdk (which bundles axios) from loading in tests.
+// Axios contains non-serializable functions that crash vitest's worker-thread IPC.
+vi.mock('@0gfoundation/0g-ts-sdk', () => ({
+  Indexer: vi.fn(() => ({
+    upload: mocks.indexerUpload,
+    download: mocks.indexerDownload,
+  })),
+  MemData: vi.fn(() => ({})),
+}));
+
 // ─── Test fixtures ────────────────────────────────────────────────────────────
 
 const TEST_CONFIG = {
   privateKey: '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80' as `0x${string}`,
+  chainId: 0,
   rpcUrl: 'http://localhost:8545',
   storageNodeUrl: 'http://localhost:5678',
   registryAddress: '0x1234000000000000000000000000000000000001' as `0x${string}`,
@@ -48,23 +61,26 @@ const MOCK_BUNDLE: MemoryBundle = {
   metadata: { category: 'trading' },
 };
 
+// getListing ABI returns: [seller, buyPrice, rentPricePerDay, forkPrice, royaltyBps]
 const MOCK_LISTING_RESULT = [
-  1000n,        // price
-  100n,         // rentalPricePerDay
-  true,         // isForSale
-  false,        // isForRent
-  true,         // isForFork
-  500,          // forkRoyaltyBps
   '0xseller00000000000000000000000000000001' as `0x${string}`, // seller
+  1000n, // buyPrice
+  100n,  // rentPricePerDay
+  500n,  // forkPrice
+  500,   // royaltyBps
 ] as const;
 
+// getSnapshot ABI returns: [contentHash, storageURI, parentTokenId, creator, createdAt]
 const MOCK_MEMORY_INFO_RESULT = [
   '0xhash00000000000000000000000000000000000000000000000000000000000001' as `0x${string}`,
   '0g://stub/abc123',
+  0n,    // parentTokenId → parent in MemoryInfo
   '0xcreator0000000000000000000000000000001' as `0x${string}`,
-  0n, // parent
-  1234567890n, // timestamp
+  1234567890n, // createdAt → timestamp in MemoryInfo
 ] as const;
+
+// Must match MEMORY_MINTED_TOPIC in client.ts
+const MEMORY_MINTED_TOPIC = '0x6a94f063b9e2ac347622f0dcce749dbbf6232caf048066debb3f06ae77504bd9';
 
 function makeReceiptWithTokenId(tokenId: bigint) {
   const hex = `0x${tokenId.toString(16).padStart(64, '0')}` as `0x${string}`;
@@ -72,7 +88,7 @@ function makeReceiptWithTokenId(tokenId: bigint) {
     logs: [
       {
         topics: [
-          '0xevent_topic' as `0x${string}`,
+          MEMORY_MINTED_TOPIC as `0x${string}`,
           hex, // tokenId as indexed arg
         ],
       },
@@ -88,6 +104,8 @@ describe('MnemosClient', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.writeContract.mockResolvedValue('0xtxhash' as `0x${string}`);
+    mocks.indexerUpload.mockResolvedValue([{ rootHash: 'abc123' }, null]);
+    mocks.indexerDownload.mockResolvedValue(null);
     client = new MnemosClient(TEST_CONFIG);
   });
 
@@ -96,14 +114,14 @@ describe('MnemosClient', () => {
       mocks.waitForTransactionReceipt.mockResolvedValue(makeReceiptWithTokenId(42n));
     });
 
-    it('calls writeContract with mintRoot and returns SnapshotResult', async () => {
+    it('calls writeContract with mintMemory and returns SnapshotResult', async () => {
       const result = await client.snapshot(MOCK_BUNDLE);
 
       expect(mocks.writeContract).toHaveBeenCalledWith(
         expect.objectContaining({
           address: TEST_CONFIG.registryAddress,
-          functionName: 'mintRoot',
-          args: expect.arrayContaining([expect.any(String), expect.any(String), 0n]),
+          functionName: 'mintMemory',
+          args: expect.arrayContaining([expect.any(String), expect.any(String)]),
         }),
       );
       expect(result).toMatchObject({
@@ -113,20 +131,6 @@ describe('MnemosClient', () => {
         contentHash: expect.stringMatching(/^0x/),
         timestamp: expect.any(Number),
       });
-    });
-
-    it('passes parentTokenId when provided', async () => {
-      await client.snapshot(MOCK_BUNDLE, 7n);
-
-      const call = mocks.writeContract.mock.calls[0][0] as { args: unknown[] };
-      expect(call.args[2]).toBe(7n);
-    });
-
-    it('defaults parentTokenId to 0n when not provided', async () => {
-      await client.snapshot(MOCK_BUNDLE);
-
-      const call = mocks.writeContract.mock.calls[0][0] as { args: unknown[] };
-      expect(call.args[2]).toBe(0n);
     });
 
     it('extracts tokenId from receipt log topic', async () => {
@@ -145,12 +149,10 @@ describe('MnemosClient', () => {
   describe('list()', () => {
     it('calls writeContract with all listing terms', async () => {
       const terms: ListingTerms = {
-        price: 1000n,
-        rentalPricePerDay: 100n,
-        isForSale: true,
-        isForRent: false,
-        isForFork: true,
-        forkRoyaltyBps: 500,
+        buyPrice: 1000n,
+        rentPricePerDay: 100n,
+        forkPrice: 500n,
+        royaltyBps: 500,
       };
 
       const txHash = await client.list(1n, terms);
@@ -159,14 +161,14 @@ describe('MnemosClient', () => {
         address: TEST_CONFIG.marketplaceAddress,
         abi: expect.any(Array),
         functionName: 'list',
-        args: [1n, 1000n, 100n, true, false, true, 500],
+        args: [1n, 1000n, 100n, 500n, 500n],
       });
       expect(txHash).toBe('0xtxhash');
     });
   });
 
   describe('buy()', () => {
-    it('fetches listing price and passes it as value', async () => {
+    it('fetches listing buyPrice and passes it as value', async () => {
       mocks.readContract.mockResolvedValue(MOCK_LISTING_RESULT);
 
       await client.buy(5n);
@@ -178,7 +180,7 @@ describe('MnemosClient', () => {
         expect.objectContaining({
           functionName: 'buy',
           args: [5n],
-          value: 1000n, // listing.price
+          value: 1000n, // listing.buyPrice
         }),
       );
     });
@@ -194,18 +196,23 @@ describe('MnemosClient', () => {
         expect.objectContaining({
           functionName: 'rent',
           args: [3n, 7n],
-          value: 700n, // rentalPricePerDay(100n) * durationDays(7)
+          value: 700n, // rentPricePerDay(100n) * durationDays(7)
         }),
       );
     });
   });
 
   describe('fork()', () => {
-    it('calls writeContract with tokenId', async () => {
-      const txHash = await client.fork(9n);
+    it('calls writeContract with all fork args', async () => {
+      const contentHash = '0xfork0000000000000000000000000000000000000000000000000000000001' as `0x${string}`;
+      const txHash = await client.fork(9n, contentHash, '0g://storage/uri', 500n);
 
       expect(mocks.writeContract).toHaveBeenCalledWith(
-        expect.objectContaining({ functionName: 'fork', args: [9n] }),
+        expect.objectContaining({
+          functionName: 'fork',
+          args: [9n, contentHash, '0g://storage/uri'],
+          value: 500n,
+        }),
       );
       expect(txHash).toBe('0xtxhash');
     });
@@ -233,13 +240,11 @@ describe('MnemosClient', () => {
       const listing = await client.getListing(1n);
 
       expect(listing).toEqual({
-        price: 1000n,
-        rentalPricePerDay: 100n,
-        isForSale: true,
-        isForRent: false,
-        isForFork: true,
-        forkRoyaltyBps: 500,
         seller: '0xseller00000000000000000000000000000001',
+        buyPrice: 1000n,
+        rentPricePerDay: 100n,
+        forkPrice: 500n,
+        royaltyBps: 500,
       });
     });
 
@@ -267,14 +272,14 @@ describe('MnemosClient', () => {
       expect(info).toEqual({
         tokenId: 7n,
         contentHash: MOCK_MEMORY_INFO_RESULT[0],
-        storageUri: '0g://stub/abc123',
-        creator: MOCK_MEMORY_INFO_RESULT[2],
-        parent: 0n,
-        timestamp: 1234567890n,
+        storageUri: MOCK_MEMORY_INFO_RESULT[1],
+        parent: MOCK_MEMORY_INFO_RESULT[2],
+        creator: MOCK_MEMORY_INFO_RESULT[3],
+        timestamp: MOCK_MEMORY_INFO_RESULT[4],
       });
     });
 
-    it('calls readContract on the registry address', async () => {
+    it('calls readContract on the registry address with getSnapshot', async () => {
       mocks.readContract.mockResolvedValue(MOCK_MEMORY_INFO_RESULT);
 
       await client.getMemoryInfo(7n);
@@ -282,30 +287,40 @@ describe('MnemosClient', () => {
       expect(mocks.readContract).toHaveBeenCalledWith(
         expect.objectContaining({
           address: TEST_CONFIG.registryAddress,
-          functionName: 'getMemoryInfo',
+          functionName: 'getSnapshot',
         }),
       );
     });
   });
 
   describe('loadMemory()', () => {
-    it('calls getMemoryInfo with the correct tokenId', async () => {
+    it('calls getSnapshot with the correct tokenId', async () => {
       mocks.readContract.mockResolvedValue(MOCK_MEMORY_INFO_RESULT);
 
-      // downloadFromStorage is stubbed to return empty Uint8Array;
-      // nacl rejects it before decryption with a nonce-size error
+      // download mock returns null (success), but the tmp file won't exist →
+      // readFile throws ENOENT, which causes loadMemory to reject
       await expect(client.loadMemory(7n)).rejects.toThrow();
 
       expect(mocks.readContract).toHaveBeenCalledWith(
-        expect.objectContaining({ functionName: 'getMemoryInfo', args: [7n] }),
+        expect.objectContaining({ functionName: 'getSnapshot', args: [7n] }),
       );
     });
   });
 
   describe('autoSnapshot()', () => {
+    const SNAPSHOT_RESULT: SnapshotResult = {
+      tokenId: 1n,
+      contentHash: '0xhash0000000000000000000000000000000000000000000000000000000001' as `0x${string}`,
+      storageUri: '0g://abc123',
+      txHash: '0xtxhash' as `0x${string}`,
+      timestamp: 1000,
+    };
+
     beforeEach(() => {
       vi.useFakeTimers();
-      mocks.waitForTransactionReceipt.mockResolvedValue(makeReceiptWithTokenId(1n));
+      // Spy on snapshot so the interval callback resolves in 1 microtask tick,
+      // allowing vi.advanceTimersByTimeAsync to properly await it.
+      vi.spyOn(client, 'snapshot').mockResolvedValue(SNAPSHOT_RESULT);
     });
 
     afterEach(() => {
@@ -321,12 +336,12 @@ describe('MnemosClient', () => {
       await vi.advanceTimersByTimeAsync(1000);
 
       expect(buildBundle).toHaveBeenCalledTimes(1);
-      expect(onSnapshot).toHaveBeenCalledWith(expect.objectContaining({ txHash: '0xtxhash' }));
+      expect(onSnapshot).toHaveBeenCalledWith(SNAPSHOT_RESULT);
     });
 
     it('calls onError when snapshot throws', async () => {
       const onError = vi.fn();
-      mocks.writeContract.mockRejectedValue(new Error('chain error'));
+      vi.spyOn(client, 'snapshot').mockRejectedValue(new Error('chain error'));
 
       client.autoSnapshot({
         intervalMs: 500,
