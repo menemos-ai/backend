@@ -1,9 +1,26 @@
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { CanActivate, ExecutionContext, INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { MemoryController } from './memory.controller';
 import { MemoryService } from './memory.service';
 import { MEMORY_REPOSITORY } from './memory.repository.interface';
+import { WalletAuthGuard } from '../common/wallet-auth.guard';
+
+const MOCK_WALLET = '0x0000000000000000000000000000000000000001' as const;
+
+class PassGuard implements CanActivate {
+  canActivate(context: ExecutionContext) {
+    const req = context.switchToHttp().getRequest<{ walletAddress?: `0x${string}` }>();
+    req.walletAddress = MOCK_WALLET;
+    return true;
+  }
+}
+
+class BlockGuard implements CanActivate {
+  canActivate() {
+    return false;
+  }
+}
 
 function buildMockService() {
   return {
@@ -13,7 +30,10 @@ function buildMockService() {
   };
 }
 
-async function buildApp(mockService: ReturnType<typeof buildMockService>): Promise<INestApplication> {
+async function buildApp(
+  mockService: ReturnType<typeof buildMockService>,
+  guardClass: new () => CanActivate = PassGuard,
+): Promise<INestApplication> {
   const module = await Test.createTestingModule({
     controllers: [MemoryController],
     providers: [
@@ -23,6 +43,8 @@ async function buildApp(mockService: ReturnType<typeof buildMockService>): Promi
   })
     .overrideProvider(MemoryService)
     .useValue(mockService)
+    .overrideGuard(WalletAuthGuard)
+    .useClass(guardClass)
     .compile();
 
   const app = module.createNestApplication();
@@ -98,7 +120,7 @@ describe('MemoryController', () => {
   });
 
   describe('GET /api/memory/:tokenId', () => {
-    it('returns memory bundle', async () => {
+    it('returns memory bundle and passes walletAddress from guard', async () => {
       const bundle = { data: { x: 1 }, metadata: { category: 'trading' } };
       svc.loadMemory.mockResolvedValue(bundle);
 
@@ -106,7 +128,18 @@ describe('MemoryController', () => {
 
       expect(res.status).toBe(200);
       expect(res.body).toEqual(bundle);
-      expect(svc.loadMemory).toHaveBeenCalledWith(3n);
+      expect(svc.loadMemory).toHaveBeenCalledWith(3n, MOCK_WALLET);
+    });
+
+    it('returns 403 when WalletAuthGuard blocks the request', async () => {
+      const blockedApp = await buildApp(svc, BlockGuard);
+      try {
+        const res = await request(blockedApp.getHttpServer()).get('/api/memory/3');
+        expect(res.status).toBe(403);
+        expect(svc.loadMemory).not.toHaveBeenCalled();
+      } finally {
+        await blockedApp.close();
+      }
     });
   });
 });
