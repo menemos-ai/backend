@@ -33,7 +33,8 @@ export class WalletAuthGuard implements CanActivate {
       typeof rawAddress !== 'string' ||
       typeof signature !== 'string' ||
       typeof timestamp !== 'string' ||
-      !tokenId
+      !tokenId ||
+      !/^\d+$/.test(tokenId)
     ) {
       return false;
     }

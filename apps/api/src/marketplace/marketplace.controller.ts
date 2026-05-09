@@ -10,6 +10,7 @@ import { MarketplaceService } from './marketplace.service';
 import { ListDto } from './dto/list.dto';
 import { RentDto } from './dto/rent.dto';
 import { PayRoyaltyDto } from './dto/pay-royalty.dto';
+import { ParseBigIntPipe } from '../common/parse-bigint.pipe';
 
 @ApiTags('Marketplace')
 @Controller('marketplace')
@@ -36,8 +37,8 @@ export class MarketplaceController {
   })
   @ApiResponse({ status: 404, description: 'Token not found on chain' })
   @ApiResponse({ status: 500, description: 'RPC or chain error' })
-  getListing(@Param('tokenId') tokenId: string) {
-    return this.marketplace.getListing(BigInt(tokenId));
+  getListing(@Param('tokenId', ParseBigIntPipe) tokenId: bigint) {
+    return this.marketplace.getListing(tokenId);
   }
 
   @Post('list')
@@ -68,8 +69,8 @@ export class MarketplaceController {
   })
   @ApiResponse({ status: 404, description: 'Token not listed or not found' })
   @ApiResponse({ status: 500, description: 'Insufficient funds or RPC error' })
-  buy(@Param('tokenId') tokenId: string) {
-    return this.marketplace.buy(BigInt(tokenId));
+  buy(@Param('tokenId', ParseBigIntPipe) tokenId: bigint) {
+    return this.marketplace.buy(tokenId);
   }
 
   @Post('rent/:tokenId')
@@ -83,8 +84,8 @@ export class MarketplaceController {
   })
   @ApiResponse({ status: 404, description: 'Token not listed for rent' })
   @ApiResponse({ status: 500, description: 'Insufficient funds or RPC error' })
-  rent(@Param('tokenId') tokenId: string, @Body() dto: RentDto) {
-    return this.marketplace.rent(BigInt(tokenId), dto);
+  rent(@Param('tokenId', ParseBigIntPipe) tokenId: bigint, @Body() dto: RentDto) {
+    return this.marketplace.rent(tokenId, dto);
   }
 
   @Post('fork/:tokenId')
@@ -102,8 +103,8 @@ export class MarketplaceController {
   })
   @ApiResponse({ status: 404, description: 'Token not available for forking' })
   @ApiResponse({ status: 500, description: 'Transaction reverted or RPC error' })
-  fork(@Param('tokenId') tokenId: string) {
-    return this.marketplace.fork(BigInt(tokenId));
+  fork(@Param('tokenId', ParseBigIntPipe) tokenId: bigint) {
+    return this.marketplace.fork(tokenId);
   }
 
   @Post('royalty/:tokenId')
@@ -122,7 +123,7 @@ export class MarketplaceController {
   })
   @ApiResponse({ status: 404, description: 'Parent token not found' })
   @ApiResponse({ status: 500, description: 'Insufficient funds or RPC error' })
-  payRoyalty(@Param('tokenId') tokenId: string, @Body() dto: PayRoyaltyDto) {
-    return this.marketplace.payRoyalty(BigInt(tokenId), dto);
+  payRoyalty(@Param('tokenId', ParseBigIntPipe) tokenId: bigint, @Body() dto: PayRoyaltyDto) {
+    return this.marketplace.payRoyalty(tokenId, dto);
   }
 }
