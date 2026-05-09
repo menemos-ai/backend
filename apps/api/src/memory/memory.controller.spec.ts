@@ -117,6 +117,12 @@ describe('MemoryController', () => {
       expect(res.body).toEqual(info);
       expect(svc.getMemoryInfo).toHaveBeenCalledWith(1n);
     });
+
+    it('returns 400 for non-integer tokenId', async () => {
+      const res = await request(app.getHttpServer()).get('/api/memory/1e2/info');
+      expect(res.status).toBe(400);
+      expect(svc.getMemoryInfo).not.toHaveBeenCalled();
+    });
   });
 
   describe('GET /api/memory/:tokenId', () => {
@@ -140,6 +146,12 @@ describe('MemoryController', () => {
       } finally {
         await blockedApp.close();
       }
+    });
+
+    it('returns 400 for non-integer tokenId', async () => {
+      const res = await request(app.getHttpServer()).get('/api/memory/1e2');
+      expect(res.status).toBe(400);
+      expect(svc.loadMemory).not.toHaveBeenCalled();
     });
   });
 });

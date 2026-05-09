@@ -38,9 +38,11 @@ export class WalletAuthGuard implements CanActivate {
       return false;
     }
 
-    // Reject stale timestamps (5-minute window)
+    // 2-minute replay window. Shorter = less replay risk; signatures are not
+    // stored server-side (stateless API), so any valid signature can be
+    // replayed within the window. Production should add a consumed-nonce store.
     const ts = parseInt(timestamp, 10);
-    if (!Number.isFinite(ts) || Math.abs(Math.floor(Date.now() / 1000) - ts) > 300) {
+    if (!Number.isFinite(ts) || Math.abs(Math.floor(Date.now() / 1000) - ts) > 120) {
       return false;
     }
 

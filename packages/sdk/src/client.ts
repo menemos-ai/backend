@@ -352,9 +352,14 @@ export class MnemosClient {
       }),
     ]);
 
-    const isOwner =
-      ownerResult.status === 'fulfilled' &&
-      getAddress(ownerResult.value as `0x${string}`) === normalizedCaller;
+    let isOwner = false;
+    if (ownerResult.status === 'fulfilled') {
+      try {
+        isOwner = getAddress(ownerResult.value as `0x${string}`) === normalizedCaller;
+      } catch {
+        // ABI mismatch or non-address return value — treat as not owner
+      }
+    }
 
     const isRenter =
       renterResult.status === 'fulfilled' && renterResult.value === true;
@@ -404,7 +409,10 @@ export class MnemosClient {
   }
 
   // v2 key: first 32 bytes of keccak256(plaintext) = the on-chain contentHash.
-  // Anyone who knows the tokenId can read contentHash from chain and derive this key.
+  // DESIGN NOTE: This provides API-enforced access only, NOT cryptographic enforcement.
+  // Anyone with direct chain + 0G Storage access can derive the key from the public
+  // contentHash without going through the API. Production upgrade: TEE/threshold key
+  // escrow so the key is released atomically with on-chain payment settlement.
   private deriveContentKey(contentHash: `0x${string}`): Uint8Array {
     return hexToBytes(contentHash).slice(0, 32);
   }
@@ -450,7 +458,8 @@ export class MnemosClient {
 
     // 0g-ts-sdk v0.3.3 writes to a file path; no in-memory download API exists.
     const rootHash = rawUri.startsWith('0g://') ? rawUri.slice(5) : rawUri;
-    const tmpPath = `${tmpdir()}/mnemos-${Date.now()}-${rootHash.slice(0, 8)}`;
+    const { randomBytes } = await import('crypto');
+    const tmpPath = `${tmpdir()}/mnemos-${Date.now()}-${randomBytes(4).toString('hex')}-${rootHash.slice(0, 8)}`;
 
     const indexer = new Indexer(this.config.storageNodeUrl);
     const err = await indexer.download(rootHash, tmpPath, false);

@@ -10,6 +10,7 @@ import {
 import { MemoryService } from './memory.service';
 import { SnapshotDto } from './dto/snapshot.dto';
 import { WalletAuthGuard } from '../common/wallet-auth.guard';
+import { ParseBigIntPipe } from '../common/parse-bigint.pipe';
 
 @ApiTags('Memory')
 @Controller('memory')
@@ -67,8 +68,8 @@ export class MemoryController {
   })
   @ApiResponse({ status: 404, description: 'Token not found on chain' })
   @ApiResponse({ status: 500, description: 'RPC or chain error' })
-  getMemoryInfo(@Param('tokenId') tokenId: string) {
-    return this.memory.getMemoryInfo(BigInt(tokenId));
+  getMemoryInfo(@Param('tokenId', ParseBigIntPipe) tokenId: bigint) {
+    return this.memory.getMemoryInfo(tokenId);
   }
 
   @Get(':tokenId')
@@ -98,9 +99,9 @@ export class MemoryController {
   @ApiResponse({ status: 404, description: 'Token not found on chain' })
   @ApiResponse({ status: 500, description: 'Decryption failed or storage unavailable' })
   loadMemory(
-    @Param('tokenId') tokenId: string,
+    @Param('tokenId', ParseBigIntPipe) tokenId: bigint,
     @Req() req: { walletAddress?: `0x${string}` },
   ) {
-    return this.memory.loadMemory(BigInt(tokenId), req.walletAddress);
+    return this.memory.loadMemory(tokenId, req.walletAddress);
   }
 }
