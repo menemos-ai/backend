@@ -67,6 +67,12 @@ describe('MarketplaceController', () => {
       expect(res.body).toEqual(listing);
       expect(svc.getListing).toHaveBeenCalledWith(1n);
     });
+
+    it('returns 400 for non-integer tokenId', async () => {
+      const res = await request(app.getHttpServer()).get('/api/marketplace/listings/1e2');
+      expect(res.status).toBe(400);
+      expect(svc.getListing).not.toHaveBeenCalled();
+    });
   });
 
   describe('POST /api/marketplace/list', () => {
@@ -95,6 +101,12 @@ describe('MarketplaceController', () => {
       expect(res.status).toBe(201);
       expect(res.body).toEqual({ txHash: '0xabc' });
       expect(svc.buy).toHaveBeenCalledWith(5n);
+    });
+
+    it('returns 400 for non-integer tokenId', async () => {
+      const res = await request(app.getHttpServer()).post('/api/marketplace/buy/abc');
+      expect(res.status).toBe(400);
+      expect(svc.buy).not.toHaveBeenCalled();
     });
   });
 
