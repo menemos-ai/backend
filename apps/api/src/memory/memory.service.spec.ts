@@ -1,4 +1,4 @@
-import { NotFoundException, InternalServerErrorException } from '@nestjs/common';
+import { ForbiddenException, NotFoundException, InternalServerErrorException } from '@nestjs/common';
 import { MemoryService } from './memory.service';
 import type { IMemoryRepository } from './memory.repository.interface';
 
@@ -106,7 +106,30 @@ describe('MemoryService', () => {
       const repo = buildMockRepo();
       const service = buildService(repo);
       await service.loadMemory(7n);
-      expect(repo.loadMemory).toHaveBeenCalledWith(7n);
+      expect(repo.loadMemory).toHaveBeenCalledWith(7n, undefined);
+    });
+
+    it('passes callerAddress to repo.loadMemory', async () => {
+      const repo = buildMockRepo();
+      const service = buildService(repo);
+      const addr = '0x0000000000000000000000000000000000000001' as `0x${string}`;
+      await service.loadMemory(7n, addr);
+      expect(repo.loadMemory).toHaveBeenCalledWith(7n, addr);
+    });
+
+    it('throws ForbiddenException when repo throws "Access denied"', async () => {
+      const repo = buildMockRepo({
+        loadMemory: jest.fn().mockRejectedValue(new Error('Access denied')),
+      });
+      const service = buildService(repo);
+      await expect(service.loadMemory(1n, '0x0000000000000000000000000000000000000001' as `0x${string}`))
+        .rejects.toThrow(ForbiddenException);
+    });
+
+    it('throws InternalServerErrorException on generic error', async () => {
+      const repo = buildMockRepo({ loadMemory: jest.fn().mockRejectedValue(new Error('rpc down')) });
+      const service = buildService(repo);
+      await expect(service.loadMemory(1n)).rejects.toThrow(InternalServerErrorException);
     });
   });
 });

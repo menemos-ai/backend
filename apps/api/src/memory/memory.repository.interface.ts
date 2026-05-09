@@ -7,5 +7,5 @@ export interface IMemoryRepository {
 
   getMemoryInfo(tokenId: bigint): Promise<MemoryInfo>;
 
-  loadMemory(tokenId: bigint): Promise<MemoryBundle>;
+  loadMemory(tokenId: bigint, callerAddress?: `0x${string}`): Promise<MemoryBundle>;
 }
