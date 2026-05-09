@@ -2,14 +2,14 @@
   "name": "mnemos-backend",
   "private": true,
   "scripts": {
-    "sdk:build": "pnpm --filter @mnemos/sdk build",
-    "sdk:dev": "pnpm --filter @mnemos/sdk dev",
+    "sdk:build": "pnpm --filter @mnemos-sdk/sdk build",
+    "sdk:dev": "pnpm --filter @mnemos-sdk/sdk dev",
     "api:dev": "pnpm --filter @mnemos/api dev",
     "api:build": "pnpm --filter @mnemos/api build",
     "api:start": "pnpm --filter @mnemos/api start:prod",
     "agent:run": "pnpm --filter @mnemos/reference-agent start",
     "build": "pnpm sdk:build && pnpm api:build",
-    "test:sdk": "pnpm --filter @mnemos/sdk test",
+    "test:sdk": "pnpm --filter @mnemos-sdk/sdk test",
     "test:api": "pnpm --filter @mnemos/api test",
     "test": "pnpm test:sdk && pnpm test:api"
   },
