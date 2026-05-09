@@ -77,9 +77,7 @@ describe('MarketplaceController', () => {
         tokenId: '1',
         price: '1000',
         rentalPricePerDay: '100',
-        isForSale: true,
-        isForRent: false,
-        isForFork: true,
+        forkPrice: '500',
         forkRoyaltyBps: 500,
       });
 
