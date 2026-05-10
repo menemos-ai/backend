@@ -5,6 +5,7 @@ export type {
   MemoryMetadata,
   MemoryCategory,
   ListingTerms,
+  ListingEvent,
   SnapshotResult,
   MemoryInfo,
   AutoSnapshotOptions,

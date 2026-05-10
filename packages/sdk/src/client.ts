@@ -17,6 +17,7 @@ import type {
   MemoryBundle,
   SnapshotResult,
   ListingTerms,
+  ListingEvent,
   AutoSnapshotOptions,
   MemoryInfo,
 } from './types.js';
@@ -77,6 +78,21 @@ const MEMORY_REGISTRY_ABI = [
     ],
   },
 ] as const;
+
+// Defined separately so it can be passed directly to publicClient.getLogs() with full type inference.
+// Also included in MEMORY_MARKETPLACE_ABI for completeness.
+const LISTED_ABI_ITEM = {
+  name: 'Listed',
+  type: 'event',
+  inputs: [
+    { name: 'tokenId', type: 'uint256', indexed: true },
+    { name: 'seller', type: 'address', indexed: true },
+    { name: 'buyPrice', type: 'uint256', indexed: false },
+    { name: 'rentPricePerDay', type: 'uint256', indexed: false },
+    { name: 'forkPrice', type: 'uint256', indexed: false },
+    { name: 'royaltyBps', type: 'uint96', indexed: false },
+  ],
+} as const;
 
 const MEMORY_MARKETPLACE_ABI = [
   {
@@ -150,6 +166,7 @@ const MEMORY_MARKETPLACE_ABI = [
     outputs: [{ name: '', type: 'bool' }],
     stateMutability: 'view',
   },
+  LISTED_ABI_ITEM,
 ] as const;
 
 // ─── URI scheme ───────────────────────────────────────────────────────────────
@@ -385,6 +402,37 @@ export class MnemosClient {
       renterResult.status === 'fulfilled' && renterResult.value === true;
 
     return isOwner || isRenter;
+  }
+
+  /**
+   * Scans marketplace Listed events from `fromBlock` (default 0n) to latest.
+   * Deduplicates by tokenId — last Listed event per tokenId wins (handles re-listing).
+   * Returns event-based listing data without cross-referencing current chain state;
+   * callers should handle acquisition failure if a listing was subsequently removed.
+   */
+  async scanListings(fromBlock?: bigint): Promise<ListingEvent[]> {
+    const logs = await this.publicClient.getLogs({
+      address: this.config.marketplaceAddress,
+      event: LISTED_ABI_ITEM,
+      fromBlock: fromBlock ?? 0n,
+      toBlock: 'latest',
+      strict: true,
+    });
+
+    const seen = new Map<string, ListingEvent>();
+    for (const log of logs) {
+      const { tokenId, seller, buyPrice, rentPricePerDay, forkPrice, royaltyBps } = log.args;
+      seen.set(tokenId.toString(), {
+        tokenId,
+        seller,
+        buyPrice,
+        rentPricePerDay,
+        forkPrice,
+        royaltyBps: Number(royaltyBps),
+      });
+    }
+
+    return Array.from(seen.values());
   }
 
   autoSnapshot(options: AutoSnapshotOptions): () => void {

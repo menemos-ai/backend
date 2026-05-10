@@ -21,6 +21,15 @@ export interface ListingTerms {
   royaltyBps: number;
 }
 
+export interface ListingEvent {
+  tokenId: bigint;
+  seller: `0x${string}`;
+  buyPrice: bigint;
+  rentPricePerDay: bigint;
+  forkPrice: bigint;
+  royaltyBps: number;
+}
+
 export interface SnapshotResult {
   tokenId: bigint;
   contentHash: `0x${string}`;
