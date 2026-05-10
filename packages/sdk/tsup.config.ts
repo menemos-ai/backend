@@ -9,6 +9,9 @@ export default defineConfig([
     sourcemap: true,
     platform: 'node',
     noExternal: ['tweetnacl', 'tweetnacl-util'],
+    banner: {
+      js: "import { createRequire } from 'module'; const require = createRequire(import.meta.url);",
+    },
   },
   {
     entry: ['src/index.ts'],

@@ -73,14 +73,14 @@ const MOCK_LISTING_RESULT = [
   500,   // royaltyBps
 ] as const;
 
-// getSnapshot ABI returns: [contentHash, storageURI, parentTokenId, creator, createdAt]
-const MOCK_MEMORY_INFO_RESULT = [
-  '0xhash00000000000000000000000000000000000000000000000000000000000001' as `0x${string}`,
-  '0g://stub/abc123',
-  0n,    // parentTokenId → parent in MemoryInfo
-  '0xcreator0000000000000000000000000000001' as `0x${string}`,
-  1234567890n, // createdAt → timestamp in MemoryInfo
-] as const;
+// getSnapshot ABI returns a tuple struct — viem returns a named-field object
+const MOCK_MEMORY_INFO_RESULT = {
+  contentHash: '0xhash00000000000000000000000000000000000000000000000000000000000001' as `0x${string}`,
+  storageURI: '0g://stub/abc123',
+  parentTokenId: 0n,
+  creator: '0xcreator0000000000000000000000000000001' as `0x${string}`,
+  createdAt: 1234567890n,
+} as const;
 
 // Must match MEMORY_MINTED_TOPIC in client.ts
 const MEMORY_MINTED_TOPIC = '0x6a94f063b9e2ac347622f0dcce749dbbf6232caf048066debb3f06ae77504bd9';
@@ -293,11 +293,11 @@ describe('MnemosClient', () => {
 
       expect(info).toEqual({
         tokenId: 7n,
-        contentHash: MOCK_MEMORY_INFO_RESULT[0],
-        storageUri: MOCK_MEMORY_INFO_RESULT[1],
-        parent: MOCK_MEMORY_INFO_RESULT[2],
-        creator: MOCK_MEMORY_INFO_RESULT[3],
-        timestamp: MOCK_MEMORY_INFO_RESULT[4],
+        contentHash: MOCK_MEMORY_INFO_RESULT.contentHash,
+        storageUri: MOCK_MEMORY_INFO_RESULT.storageURI,
+        parent: MOCK_MEMORY_INFO_RESULT.parentTokenId,
+        creator: MOCK_MEMORY_INFO_RESULT.creator,
+        timestamp: MOCK_MEMORY_INFO_RESULT.createdAt,
       });
     });
 
@@ -336,14 +336,14 @@ describe('MnemosClient', () => {
       // Step 2: capture encrypted bytes from the MemData constructor call
       const encryptedBytes: Uint8Array = mocks.MemData.mock.calls[0][0];
 
-      // Step 3: mock getSnapshot to return the v2 token info
-      mocks.readContract.mockResolvedValue([
-        snapshotResult.contentHash,
-        snapshotResult.storageUri, // v2:0g://...
-        0n,
-        '0xcreator0000000000000000000000000000001' as `0x${string}`,
-        1234567890n,
-      ]);
+      // Step 3: mock getSnapshot to return the v2 token info (tuple object)
+      mocks.readContract.mockResolvedValue({
+        contentHash: snapshotResult.contentHash,
+        storageURI: snapshotResult.storageUri, // v2:0g://...
+        parentTokenId: 0n,
+        creator: '0xcreator0000000000000000000000000000001' as `0x${string}`,
+        createdAt: 1234567890n,
+      });
 
       // Step 4: mock download to write the captured encrypted bytes to the tmp file
       mocks.indexerDownload.mockImplementation(
