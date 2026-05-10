@@ -100,7 +100,7 @@ describe('MemoryController', () => {
   });
 
   describe('GET /api/memory/:tokenId/info', () => {
-    it('returns memory info', async () => {
+    it('returns memory info including title', async () => {
       const info = {
         tokenId: '1',
         contentHash: '0xhash',
@@ -108,6 +108,7 @@ describe('MemoryController', () => {
         creator: '0xdeadbeef',
         parent: '0',
         timestamp: '1000000000',
+        title: 'Yield Bot',
       };
       svc.getMemoryInfo.mockResolvedValue(info);
 
@@ -116,6 +117,24 @@ describe('MemoryController', () => {
       expect(res.status).toBe(200);
       expect(res.body).toEqual(info);
       expect(svc.getMemoryInfo).toHaveBeenCalledWith(1n);
+    });
+
+    it('returns null title in response when title is null', async () => {
+      const info = {
+        tokenId: '2',
+        contentHash: '0xhash',
+        storageUri: '0g://uri',
+        creator: '0xdeadbeef',
+        parent: '0',
+        timestamp: '1000000000',
+        title: null,
+      };
+      svc.getMemoryInfo.mockResolvedValue(info);
+
+      const res = await request(app.getHttpServer()).get('/api/memory/2/info');
+
+      expect(res.status).toBe(200);
+      expect(res.body.title).toBeNull();
     });
 
     it('returns 400 for non-integer tokenId', async () => {

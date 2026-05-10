@@ -74,8 +74,14 @@ describe('MemoryService', () => {
   });
 
   describe('getMemoryInfo', () => {
-    it('converts bigint fields to strings', async () => {
-      const service = buildService(buildMockRepo());
+    it('converts bigint fields to strings and includes title from bundle', async () => {
+      const repo = buildMockRepo({
+        loadMemory: jest.fn().mockResolvedValue({
+          data: {},
+          metadata: { category: 'trading', title: 'My Agent v1' },
+        }),
+      });
+      const service = buildService(repo);
       const result = await service.getMemoryInfo(1n);
       expect(result).toEqual({
         tokenId: '1',
@@ -84,14 +90,39 @@ describe('MemoryService', () => {
         creator: '0xdeadbeef',
         parent: '0',
         timestamp: '1000000000',
+        title: 'My Agent v1',
       });
     });
 
-    it('calls repo.getMemoryInfo with correct tokenId', async () => {
+    it('returns title: null when bundle has no title field', async () => {
+      const service = buildService(buildMockRepo()); // mockBundle has no title
+      const result = await service.getMemoryInfo(1n);
+      expect(result).toMatchObject({ title: null });
+    });
+
+    it('returns title: null when loadMemory throws', async () => {
+      const repo = buildMockRepo({
+        loadMemory: jest.fn().mockRejectedValue(new Error('storage unavailable')),
+      });
+      const service = buildService(repo);
+      const result = await service.getMemoryInfo(1n);
+      expect(result).toMatchObject({ title: null });
+    });
+
+    it('calls repo.getMemoryInfo and repo.loadMemory with correct tokenId', async () => {
       const repo = buildMockRepo();
       const service = buildService(repo);
       await service.getMemoryInfo(99n);
       expect(repo.getMemoryInfo).toHaveBeenCalledWith(99n);
+      expect(repo.loadMemory).toHaveBeenCalledWith(99n);
+    });
+
+    it('propagates chain error when repo.getMemoryInfo throws', async () => {
+      const repo = buildMockRepo({
+        getMemoryInfo: jest.fn().mockRejectedValue(new Error('token not found')),
+      });
+      const service = buildService(repo);
+      await expect(service.getMemoryInfo(1n)).rejects.toThrow(NotFoundException);
     });
   });
 

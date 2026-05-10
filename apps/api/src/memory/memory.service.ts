@@ -29,7 +29,24 @@ export class MemoryService {
 
   async getMemoryInfo(tokenId: bigint) {
     try {
-      const info = await this.repo.getMemoryInfo(tokenId);
+      // Run chain read and bundle download in parallel.
+      // loadMemory without callerAddress skips the hasAccess check — intentional,
+      // because v2 bundle keys are publicly derivable from the on-chain contentHash.
+      const [infoResult, bundleResult] = await Promise.allSettled([
+        this.repo.getMemoryInfo(tokenId),
+        this.repo.loadMemory(tokenId),
+      ]);
+
+      if (infoResult.status === 'rejected') {
+        throw infoResult.reason;
+      }
+
+      const info = infoResult.value;
+      const title =
+        bundleResult.status === 'fulfilled'
+          ? ((bundleResult.value?.metadata?.title as string | undefined) ?? null)
+          : null;
+
       return {
         tokenId: info.tokenId.toString(),
         contentHash: info.contentHash,
@@ -37,6 +54,7 @@ export class MemoryService {
         creator: info.creator,
         parent: info.parent.toString(),
         timestamp: info.timestamp.toString(),
+        title,
       };
     } catch (error) {
       handleChainError(error);
