@@ -2,6 +2,7 @@ import { config } from 'dotenv';
 import { dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { MnemosClient } from '@mnemos-sdk/sdk';
+import type { SnapshotResult } from '@mnemos-sdk/sdk';
 import { createPublicClient, createWalletClient, http, parseEther, defineChain } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 
@@ -100,13 +101,13 @@ mnemos.autoSnapshot({
       tags: ['example', 'basic'],
     },
   }),
-  onSnapshot: (result) => {
+  onSnapshot: (result: SnapshotResult) => {
     console.log('Minted token', result.tokenId.toString());
     console.log('  txHash:    ', result.txHash);
     console.log('  storageUri:', result.storageUri);
-    listToken(result.tokenId).catch((err) =>
+    listToken(result.tokenId).catch((err: Error) =>
       console.error('List failed:', err.message),
     );
   },
-  onError: (err) => console.error('Snapshot failed:', err.message),
+  onError: (err: Error) => console.error('Snapshot failed:', err.message),
 });
