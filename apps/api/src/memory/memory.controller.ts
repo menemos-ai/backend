@@ -32,9 +32,9 @@ export class MemoryController {
     schema: {
       example: {
         tokenId: '42',
-        contentHash: '0xabc123...def',
-        storageUri: '0g://stub/abc123',
-        txHash: '0xdeadbeef...',
+        contentHash: '0xe7e68ea56a3288a641f40d33f0616836b0b80e842b3f98dbb0fd5fbca28d4021',
+        storageUri: '0g://0xe7e68ea56a3288a641f40d33f0616836b0b80e842b3f98dbb0fd5fbca28d4021',
+        txHash: '0xdeadbeef1234567890abcdef1234567890abcdef1234567890abcdef12345678',
         timestamp: 1746614400000,
       },
     },
@@ -57,12 +57,12 @@ export class MemoryController {
     description: 'On-chain memory info',
     schema: {
       example: {
-        tokenId: '1',
-        contentHash: '0xabc123...def',
-        storageUri: '0g://stub/abc123',
-        creator: '0xdeadbeef00000000000000000000000000000001',
+        tokenId: '2',
+        contentHash: '0xe7e68ea56a3288a641f40d33f0616836b0b80e842b3f98dbb0fd5fbca28d4021',
+        storageUri: '0g://0xe7e68ea56a3288a641f40d33f0616836b0b80e842b3f98dbb0fd5fbca28d4021',
+        creator: '0x742d35Cc6634C0532925a3b8D4C9c5e9C8b5F0a1',
         parent: '0',
-        timestamp: '1234567890',
+        timestamp: '1746614400',
       },
     },
   })

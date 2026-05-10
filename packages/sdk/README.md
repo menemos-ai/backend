@@ -52,7 +52,7 @@ mnemos.autoSnapshot({
 | `storageNodeUrl` | `string` | 0G Storage indexer node URL |
 | `registryAddress` | `` `0x${string}` `` | Deployed `MemoryRegistry` contract address |
 | `marketplaceAddress` | `` `0x${string}` `` | Deployed `MemoryMarketplace` contract address |
-| `storageMock` | `boolean` | Skip real upload, use stub URI — useful for testing |
+| `storageMock` | `boolean` | Skip real 0G Storage upload and use an in-memory stub URI — for unit testing only |
 
 ## API
 

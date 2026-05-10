@@ -14,13 +14,13 @@ The two ABI arrays (`MEMORY_REGISTRY_ABI`, `MEMORY_MARKETPLACE_ABI`) are minimal
 
 Keep them `as const` — viem's type inference depends on it.
 
-## The two stubbed methods
+## Storage
 
-`uploadToStorage` and `downloadFromStorage` are the only unimplemented methods. They `console.warn` intentionally so developers notice. Replacing them with real `@0glabs/0g-ts-sdk` calls is the top priority before production. Everything else in the SDK is functional.
+`uploadToStorage` uses `@0gfoundation/0g-ts-sdk` (`Indexer.upload` + `MemData`). `downloadFromStorage` uses `Indexer.download` to a temp file then reads and deletes it. Both use a viem-to-ethers signer adapter so no separate ethers dependency is needed.
 
 ## Encryption
 
-`deriveSymmetricKey()` derives a 32-byte key deterministically from the wallet address via keccak256. This means anyone with the same private key can decrypt — and nobody else can without receiving the key out-of-band. This is a known MVP limitation; see root CLAUDE.md for the v2 TEE/threshold design.
+v2 key scheme: `contentHash = keccak256(plaintext JSON)` — used as both the on-chain content identifier and the 32-byte NaCl symmetric encryption key seed (`deriveContentKey`). Storage URIs are prefixed `v2:` on-chain. v1 tokens (no prefix) fall back to a wallet-address-derived key and can only be decrypted by the producer. See root CLAUDE.md for the access control model.
 
 The `encrypt` method prepends the nonce to the ciphertext (nonce || box). `decrypt` reverses this. Don't change this layout — it's the wire format stored in 0G Storage.
 

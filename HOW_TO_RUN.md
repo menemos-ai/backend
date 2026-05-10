@@ -21,7 +21,7 @@ npm install @mnemos/sdk @0gfoundation/0g-ts-sdk
 
 > `@0gfoundation/0g-ts-sdk` is a required peer dependency for 0G Storage upload and download.
 
-If you are consuming this repo directly (e.g. during a hackathon), you can pin to the git URL instead:
+If you are consuming this repo directly, you can pin to the git URL instead:
 
 ```bash
 npm install github:TarasBrilian/mnemos-backend#main
@@ -299,7 +299,7 @@ The reference agent in `apps/reference-agent/` is a working example that exercis
 
 ```bash
 pnpm sdk:build   # build the SDK first
-pnpm agent:run   # start the DeFi yield explorer demo agent
+pnpm agent:run   # start the DeFi yield explorer agent
 ```
 
-It generates a synthetic trade event every 2 seconds and triggers an on-chain snapshot every 30 seconds. Watch your 0G Chain explorer to see tokens being minted in real time.
+It generates a trade event every 2 seconds and triggers an on-chain snapshot every 30 seconds. Watch your 0G Chain explorer to see tokens being minted in real time.

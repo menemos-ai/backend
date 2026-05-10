@@ -12,14 +12,14 @@ Mnemos is split across three repos:
 
 This repo depends on `mnemos-contract` for: deployed contract addresses (read from env at runtime) and the ABI shape (encoded as literals in `client.ts`). When the contract changes, the SDK has to update its ABI literals to match — there is no automatic ABI sync. Stale ABIs cause silent encoder failures.
 
-`mnemos-frontend` consumes this repo's published SDK (`@mnemos/sdk` on npm). Bumping the SDK version requires re-installing in the frontend repo. For the hackathon, you might pin to a git URL instead of publishing to npm — both work, the git pin is faster to iterate on.
+`mnemos-frontend` consumes this repo's published SDK (`@mnemos/sdk` on npm). Bumping the SDK version requires re-installing in the frontend repo. You can also pin to a git URL instead of publishing to npm — both work.
 
 ## What this repo does
 
 `packages/sdk/` is the published library. `MnemosClient` is the single entry point that wraps three concerns:
 
 1. **Encryption + storage** — bundles agent memory into JSON, encrypts with a derived symmetric key, uploads to 0G Storage, returns a content-addressed URI.
-2. **On-chain registration** — calls `MemoryRegistry.mintRoot` to record provenance: content hash, storage URI, creator, parent (for forks), timestamp.
+2. **On-chain registration** — calls `MemoryRegistry.mintMemory` to record provenance: content hash, storage URI, creator, parent (for forks), timestamp.
 3. **Marketplace operations** — list/buy/rent/fork through the `MemoryMarketplace` contract, plus `payRoyalty` for child agents settling earnings to parents.
 
 Plus a convenience helper, `autoSnapshot`, that runs `snapshot()` on a configurable interval — this is what makes "5-line integration" possible from the agent developer's POV.
@@ -32,13 +32,13 @@ Plus a convenience helper, `autoSnapshot`, that runs `snapshot()` on a configura
 
 The frontend still uses wagmi for user-signed transactions (buy/rent require the user's own wallet). The API handles server-side operations and read aggregation.
 
-`apps/reference-agent/` is a simulated DeFi yield explorer. It generates synthetic trade events every 2 seconds and accumulates them into an in-memory `AgentMemory` object, then uses `mnemos.autoSnapshot` with a 30-second interval (sped up from production daily/weekly cadence) so the demo video can show snapshots being minted in real time.
-
-The reference agent is a *demo*, not a product. It doesn't trade real markets. The point is making the snapshot flow visually compelling: trade → memory grows → snapshot triggers → token mints on chain → URI appears in 0G Explorer.
+`apps/reference-agent/` is a DeFi yield agent that demonstrates the full SDK lifecycle end-to-end. It generates trade events, accumulates them into an `AgentMemory` object, and uses `mnemos.autoSnapshot` with a 30-second interval to trigger live on-chain mints against the deployed mainnet contracts.
 
 ## Tech stack
 
 `viem` for chain interaction (typed, modern, lighter than ethers). `tweetnacl` + `tweetnacl-util` for symmetric encryption (small, audited, fine for MVP). `@0glabs/0g-ts-sdk` is a peer dependency — verify the actual package name and current API at https://docs.0g.ai/ before integrating.
+
+`viem` for chain interaction (typed, modern, lighter than ethers). `tweetnacl` + `tweetnacl-util` for symmetric encryption (small, audited). `@0gfoundation/0g-ts-sdk` for 0G Storage uploads and downloads.
 
 SDK: ESM-only output via `tsup`. The reference agent uses `"type": "module"` and `tsx` for direct TypeScript execution.
 
@@ -52,20 +52,11 @@ Errors: throw, don't return error tuples. Callers wrap in `try/catch`. The `auto
 
 State: `MnemosClient` owns the `WalletClient`, `PublicClient`, and the `autoSnapshotTimer`. It's intended to be a singleton per-agent. Don't add caching or memoization to the client — let callers handle that at their layer.
 
-Stubbed methods: `uploadToStorage` and `downloadFromStorage` are deliberately stubbed and noisy (they `console.warn` when called). Replacing these with real `@0glabs/0g-ts-sdk` calls is the **first thing** that needs to happen — until that's done, the SDK doesn't actually persist anything.
-
 ## Encryption design
 
-Current MVP: symmetric key derived deterministically from the creator's wallet address (see `deriveSymmetricKey`). This means the creator can always decrypt their own memory, but **buyers can't decrypt without receiving the key out-of-band from the creator**.
+v2 key scheme (current): `contentHash = keccak256(plaintext JSON)` — used as both the on-chain content identifier and the NaCl symmetric encryption key seed. Storage URIs are prefixed `v2:` to distinguish from v1 tokens (which used a wallet-address-derived key). Any holder of a tokenId can derive the decryption key from the public on-chain `contentHash`.
 
-This is a known gap. The production design:
-
-1. Creator encrypts memory with a random symmetric key K.
-2. K is split via threshold cryptography (or escrowed in a TEE).
-3. The marketplace contract, on payment confirmation, releases K to the buyer (atomically with payment).
-4. Renter case: K is time-bounded — re-released on each rental, expires with the rental window.
-
-For the hackathon demo, the simplification is fine: the producer agent and the consumer agent both run with the same wallet during demo, so decryption "just works." Mention the threshold/TEE design in the pitch as v2.
+This provides API-enforced access control, not cryptographic confidentiality. A production upgrade would use TEE-based or threshold key escrow so the key is released atomically with on-chain payment settlement.
 
 ## Common commands
 
@@ -85,12 +76,12 @@ All apps read addresses and keys from environment variables populated by the con
 
 When iterating on contract changes locally:
 
-1. Make change in `mnemos-contract`, redeploy to testnet (or to a local anvil).
+1. Make change in `mnemos-contract`, redeploy (local anvil or a new chain deployment).
 2. Update the new addresses in this repo's `.env`.
 3. If the function signature, args, or events changed: update the corresponding ABI entry in `packages/sdk/src/client.ts`. The ABIs there are minimal — only what the SDK actually calls.
 4. Rebuild the SDK (`pnpm sdk:build`) before testing.
 
-For local anvil iteration: spin up anvil in the contract repo, deploy to it, point both this repo and the frontend repo's `OG_RPC_URL` at `http://127.0.0.1:8545`. Faster than testnet round-trips.
+For local anvil iteration: spin up anvil in the contract repo, deploy to it, point both this repo and the frontend repo's `OG_RPC_URL` at `http://127.0.0.1:8545`.
 
 ## When extending
 
@@ -102,7 +93,7 @@ Adding a new memory category convention? It's just a string in `MemoryMetadata.c
 
 Changing the auto-snapshot trigger logic (e.g., snapshot on memory delta size threshold rather than time)? Replace `setInterval` with a more sophisticated mechanism, but keep `autoSnapshot` returning an unsubscribe function — that's the public contract callers depend on.
 
-## Hackathon scope discipline
+## Scope discipline
 
 The SDK is the developer-facing surface — its DX matters more than its feature breadth. Spend time on:
 
@@ -115,6 +106,5 @@ Don't spend time on:
 - Caching layer
 - Retry logic with exponential backoff
 - Browser bundling (this is a Node.js library; the frontend reads chain through wagmi separately)
-- Mock mode / local-only mode (let users point at 0G testnet or local anvil)
 
 If you find yourself adding a 10th method, ask whether it belongs in the SDK or in user code. The SDK should be a thin, opinionated wrapper — not a framework.
