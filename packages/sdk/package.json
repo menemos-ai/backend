@@ -31,7 +31,8 @@
     "prepublishOnly": "pnpm build",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
-    "example": "tsx examples/basic-integration.ts"
+    "example": "tsx examples/basic-integration.ts",
+    "example:customer": "tsx examples/customer-integration.ts"
   },
   "engines": {
     "node": ">=20"
