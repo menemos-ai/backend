@@ -2,6 +2,7 @@ export type MemoryCategory = 'trading' | 'research' | 'support' | 'gaming' | 'so
 
 export interface MemoryMetadata {
   category: MemoryCategory;
+  title?: string;
   agentId?: string;
   version?: string;
   createdAt?: number;
