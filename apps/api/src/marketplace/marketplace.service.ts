@@ -19,7 +19,7 @@ export class MarketplaceService {
         buyPrice: result.buyPrice.toString(),
         rentPricePerDay: result.rentPricePerDay.toString(),
         forkPrice: result.forkPrice.toString(),
-        royaltyBps: result.royaltyBps,
+        royaltyBps: Number(result.royaltyBps),
       };
     } catch (error) {
       handleChainError(error);
