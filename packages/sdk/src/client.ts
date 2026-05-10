@@ -37,16 +37,24 @@ const MEMORY_REGISTRY_ABI = [
     stateMutability: 'nonpayable',
   },
   {
-    // Returns MemorySnapshot struct: contentHash, storageURI, parentTokenId, creator, createdAt
+    // Returns MemorySnapshot struct encoded as a single dynamic tuple.
+    // Must use type:'tuple' so viem reads the outer offset pointer Solidity adds
+    // for structs with dynamic members (string) before the struct data.
     name: 'getSnapshot',
     type: 'function',
     inputs: [{ name: 'tokenId', type: 'uint256' }],
     outputs: [
-      { name: 'contentHash', type: 'bytes32' },
-      { name: 'storageURI', type: 'string' },
-      { name: 'parentTokenId', type: 'uint256' },
-      { name: 'creator', type: 'address' },
-      { name: 'createdAt', type: 'uint256' },
+      {
+        name: '',
+        type: 'tuple',
+        components: [
+          { name: 'contentHash', type: 'bytes32' },
+          { name: 'storageURI', type: 'string' },
+          { name: 'parentTokenId', type: 'uint256' },
+          { name: 'creator', type: 'address' },
+          { name: 'createdAt', type: 'uint256' },
+        ],
+      },
     ],
     stateMutability: 'view',
   },
@@ -305,10 +313,22 @@ export class MnemosClient {
       functionName: 'getSnapshot',
       args: [tokenId],
     });
-    // getSnapshot returns struct: contentHash, storageURI, parentTokenId, creator, createdAt
-    const [contentHash, storageUri, parent, creator, timestamp] =
-      result as unknown as [`0x${string}`, string, bigint, `0x${string}`, bigint];
-    return { tokenId, contentHash, storageUri, creator, parent, timestamp };
+    // viem returns a named-field object for tuple outputs
+    const snap = result as unknown as {
+      contentHash: `0x${string}`;
+      storageURI: string;
+      parentTokenId: bigint;
+      creator: `0x${string}`;
+      createdAt: bigint;
+    };
+    return {
+      tokenId,
+      contentHash: snap.contentHash,
+      storageUri: snap.storageURI,
+      creator: snap.creator,
+      parent: snap.parentTokenId,
+      timestamp: snap.createdAt,
+    };
   }
 
   async loadMemory(tokenId: bigint): Promise<MemoryBundle> {
