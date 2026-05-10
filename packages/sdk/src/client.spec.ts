@@ -8,6 +8,7 @@ import type { MemoryBundle, ListingTerms, SnapshotResult } from './types.js';
 const mocks = vi.hoisted(() => ({
   writeContract: vi.fn<[], `0x${string}`>().mockResolvedValue('0xtxhash'),
   readContract: vi.fn(),
+  getLogs: vi.fn().mockResolvedValue([]),
   waitForTransactionReceipt: vi.fn(),
   accountAddress: '0xdeadbeef00000000000000000000000000000001' as `0x${string}`,
   indexerUpload: vi.fn().mockResolvedValue([{ rootHash: 'abc123' }, null]),
@@ -24,6 +25,7 @@ vi.mock('viem', async (importOriginal) => {
     createWalletClient: vi.fn(() => ({ writeContract: mocks.writeContract })),
     createPublicClient: vi.fn(() => ({
       readContract: mocks.readContract,
+      getLogs: mocks.getLogs,
       waitForTransactionReceipt: mocks.waitForTransactionReceipt,
     })),
   };
@@ -495,6 +497,93 @@ describe('MnemosClient', () => {
       stop();
 
       expect(onSnapshot).toHaveBeenCalledTimes(3);
+    });
+  });
+
+  describe('scanListings()', () => {
+    // Helper to build a synthetic Listed event log matching the ABI shape
+    function makeListedLog(
+      tokenId: bigint,
+      seller: `0x${string}`,
+      buyPrice: bigint,
+      rentPricePerDay: bigint,
+      forkPrice: bigint,
+      royaltyBps: bigint,
+    ) {
+      return {
+        args: { tokenId, seller, buyPrice, rentPricePerDay, forkPrice, royaltyBps },
+      };
+    }
+
+    it('returns a ListingEvent for each unique tokenId in getLogs result', async () => {
+      mocks.getLogs.mockResolvedValue([
+        makeListedLog(1n, '0xseller0000000000000000000000000000000001', 1000n, 100n, 500n, 500n),
+        makeListedLog(2n, '0xseller0000000000000000000000000000000002', 2000n, 0n, 0n, 0n),
+        makeListedLog(3n, '0xseller0000000000000000000000000000000003', 0n, 50n, 0n, 250n),
+      ]);
+
+      const listings = await client.scanListings();
+
+      expect(listings).toHaveLength(3);
+      expect(listings[0]).toMatchObject({ tokenId: 1n, buyPrice: 1000n, rentPricePerDay: 100n, royaltyBps: 500 });
+      expect(listings[1]).toMatchObject({ tokenId: 2n, buyPrice: 2000n });
+      expect(listings[2]).toMatchObject({ tokenId: 3n, rentPricePerDay: 50n });
+    });
+
+    it('deduplicates tokenIds — last Listed event wins (re-listing)', async () => {
+      mocks.getLogs.mockResolvedValue([
+        makeListedLog(5n, '0xseller0000000000000000000000000000000001', 1000n, 0n, 0n, 0n),
+        // Same tokenId re-listed with new price
+        makeListedLog(5n, '0xseller0000000000000000000000000000000001', 1500n, 200n, 0n, 0n),
+      ]);
+
+      const listings = await client.scanListings();
+
+      expect(listings).toHaveLength(1);
+      expect(listings[0]).toMatchObject({ tokenId: 5n, buyPrice: 1500n, rentPricePerDay: 200n });
+    });
+
+    it('returns empty array when getLogs returns no events', async () => {
+      mocks.getLogs.mockResolvedValue([]);
+
+      const listings = await client.scanListings();
+
+      expect(listings).toEqual([]);
+    });
+
+    it('passes fromBlock: 0n to getLogs when called without argument', async () => {
+      await client.scanListings();
+
+      expect(mocks.getLogs).toHaveBeenCalledWith(
+        expect.objectContaining({ fromBlock: 0n }),
+      );
+    });
+
+    it('passes custom fromBlock to getLogs', async () => {
+      await client.scanListings(500n);
+
+      expect(mocks.getLogs).toHaveBeenCalledWith(
+        expect.objectContaining({ fromBlock: 500n }),
+      );
+    });
+
+    it('converts royaltyBps from bigint to number in returned ListingEvent', async () => {
+      mocks.getLogs.mockResolvedValue([
+        makeListedLog(7n, '0xseller0000000000000000000000000000000001', 0n, 100n, 0n, 750n),
+      ]);
+
+      const [listing] = await client.scanListings();
+
+      expect(typeof listing.royaltyBps).toBe('number');
+      expect(listing.royaltyBps).toBe(750);
+    });
+
+    it('calls getLogs against the marketplace address', async () => {
+      await client.scanListings();
+
+      expect(mocks.getLogs).toHaveBeenCalledWith(
+        expect.objectContaining({ address: TEST_CONFIG.marketplaceAddress }),
+      );
     });
   });
 });
