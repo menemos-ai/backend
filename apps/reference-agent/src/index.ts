@@ -32,6 +32,7 @@ function generateTrade(): TradeEvent {
 async function main() {
   const mnemos = new MnemosClient({
     privateKey: process.env.AGENT_PRIVATE_KEY as `0x${string}`,
+    chainId: parseInt(process.env.OG_CHAIN_ID ?? '16601', 10),
     rpcUrl: process.env.OG_RPC_URL!,
     storageNodeUrl: process.env.OG_STORAGE_NODE!,
     registryAddress: process.env.REGISTRY_ADDRESS as `0x${string}`,
@@ -69,6 +70,7 @@ async function main() {
       data: { ...memory, trades: memory.trades.slice(-100) },
       metadata: {
         category: 'trading',
+        title: 'DeFi Yield Explorer v1',
         agentId: 'defi-yield-explorer-v1',
         version: '1.0.0',
         createdAt: Date.now(),
