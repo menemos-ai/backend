@@ -16,7 +16,7 @@ This guide walks through integrating the Mnemos SDK into your AI agent, from ins
 ## Step 1: Install the SDK
 
 ```bash
-npm install @mnemos/sdk @0gfoundation/0g-ts-sdk
+npm install @mnemos-sdk/sdk @0gfoundation/0g-ts-sdk
 ```
 
 > `@0gfoundation/0g-ts-sdk` is a required peer dependency for 0G Storage upload and download.
@@ -64,7 +64,7 @@ The only value you need to supply is `AGENT_PRIVATE_KEY` — your own wallet's p
 
 ```ts
 import 'dotenv/config';
-import { MnemosClient } from '@mnemos/sdk';
+import { MnemosClient } from '@mnemos-sdk/sdk';
 
 const mnemos = new MnemosClient({
   privateKey: process.env.AGENT_PRIVATE_KEY as `0x${string}`,
@@ -85,7 +85,7 @@ A snapshot encrypts your agent's current memory state, uploads it to 0G Storage,
 ### One-time manual snapshot
 
 ```ts
-import type { MemoryBundle } from '@mnemos/sdk';
+import type { MemoryBundle } from '@mnemos-sdk/sdk';
 
 const bundle: MemoryBundle = {
   data: {

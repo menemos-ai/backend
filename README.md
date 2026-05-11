@@ -2,6 +2,8 @@
 
 > The TypeScript layer of Mnemos: a client SDK that agent developers drop into their runtime, plus a reference agent that demonstrates the full lifecycle.
 
+For project overview, architecture diagram, and judging context, see the [root README](../README.md).
+
 This is one of three repositories that make up Mnemos:
 
 | Repo | Purpose |
@@ -16,7 +18,7 @@ This is one of three repositories that make up Mnemos:
 
 This repo is a small monorepo of two TypeScript packages:
 
-- **`packages/sdk/`** — `@mnemos/sdk`. The public client library. Agent developers `npm install @mnemos/sdk` and integrate with five lines of code: their agent's memory gets auto-snapshotted to 0G Storage, minted as a memory token on 0G Chain, and made available for sale, rent, or fork on the marketplace.
+- **`packages/sdk/`** — `@mnemos-sdk/sdk`. The public client library. Agent developers `npm install @mnemos-sdk/sdk` and integrate with five lines of code: their agent's memory gets auto-snapshotted to 0G Storage, minted as a memory token on 0G Chain, and made available for sale, rent, or fork on the marketplace.
 - **`apps/reference-agent/`** — a DeFi yield agent that demonstrates the full SDK lifecycle end-to-end against the live 0G Mainnet contracts.
 
 ---
@@ -31,6 +33,18 @@ This repo is a small monorepo of two TypeScript packages:
 - [`tsx`](https://github.com/privatenumber/tsx) for running the reference agent in dev
 
 Node.js ≥ 20. Package manager: `pnpm`.
+
+---
+
+## 0G Integration
+
+The SDK integrates two 0G Network modules:
+
+- **0G Storage** — memory bundles are uploaded via `@0gfoundation/0g-ts-sdk` using `Indexer.upload` + `MemData`. Downloads use `Indexer.download`. The storage URI is content-addressed and returned to the caller.
+- **0G Chain** — after a successful upload, the SDK calls `MemoryRegistry.mintMemory(contentHash, storageUri)` on 0G Chain (chain ID 16661) to create a provenance NFT. Marketplace operations (`list`, `buy`, `rent`, `fork`, `payRoyalty`) call `MemoryMarketplace` on the same chain.
+- **Encryption key scheme (v2):** `contentHash = keccak256(plaintext JSON)` — the hash is stored on-chain and also seeds the NaCl symmetric encryption key. Storage URIs are prefixed `v2:` for forward-compatible versioning.
+
+Deployed contract addresses: see [root README](../README.md) or `contract/deployments/latest.json`.
 
 ---
 
@@ -76,7 +90,7 @@ The agent will start emitting trades to stdout and trigger an on-chain snapshot 
 ```
 mnemos-backend/
 ├── packages/
-│   └── sdk/                          @mnemos/sdk
+│   └── sdk/                          @mnemos-sdk/sdk
 │       ├── src/
 │       │   ├── client.ts             MnemosClient main class
 │       │   ├── types.ts              Public types
@@ -104,7 +118,7 @@ mnemos-backend/
 Once published, this is what an agent developer needs to integrate Mnemos:
 
 ```typescript
-import { MnemosClient } from "@mnemos/sdk";
+import { MnemosClient } from "@mnemos-sdk/sdk";
 
 const mnemos = new MnemosClient({
   privateKey: process.env.AGENT_PRIVATE_KEY,
@@ -134,6 +148,12 @@ pnpm agent:run               # run reference agent
 
 ---
 
+## Full Integration Guide
+
+For step-by-step SDK integration, marketplace operations (list / buy / rent / fork / royalty), and REST API usage, see [`HOW_TO_RUN.md`](HOW_TO_RUN.md).
+
+---
+
 ## License
 
-MIT# backend
+MIT
